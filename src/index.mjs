@@ -449,6 +449,21 @@ class NdiRecorderServer {
       return res.end();
     }
 
+    // Serve vendored static assets (local Tailwind)
+    if (pathname === '/vendor/tailwindcss.min.js' && (req.method === 'GET' || req.method === 'HEAD')) {
+      try {
+        const js = fs.readFileSync(path.join(process.cwd(), 'vendor', 'tailwindcss.min.js'));
+        res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.writeHead(200);
+        if (req.method === 'HEAD') return res.end();
+        return res.end(js);
+      } catch (e) {
+        res.writeHead(404);
+        return res.end('not found');
+      }
+    }
+
     // Serve HTML Web Dashboard on root, settings, and api-docs paths
     if ((pathname === '/' || pathname === '/settings' || pathname === '/api-docs' || pathname === '/index.html') && (req.method === 'GET' || req.method === 'HEAD')) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -493,8 +508,7 @@ class NdiRecorderServer {
           const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
             <rect width="1280" height="720" fill="#0f172a"/>
             <rect x="40" y="40" width="1200" height="640" fill="#1e293b" rx="16"/>
-            <circle cx="640" cy="300" r="50" fill="#06b6d4" opacity="0.15"/>
-            <path d="M620 280 L660 300 L620 320 Z" fill="#06b6d4"/>
+            <text x="640" y="330" font-size="80" text-anchor="middle">🎥</text>
             <text x="640" y="390" font-family="monospace" font-size="30" fill="#38bdf8" text-anchor="middle" font-weight="bold">${displayTitle}</text>
             <text x="640" y="440" font-family="sans-serif" font-size="20" fill="#94a3b8" text-anchor="middle">Connexion NDI Native C SDK en cours (1280x720 MJPEG Stream)...</text>
           </svg>`;

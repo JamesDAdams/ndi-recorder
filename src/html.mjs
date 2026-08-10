@@ -1,3 +1,100 @@
+const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
+  <main id="page-apidocs" class="hidden flex-1 p-6 max-w-5xl mx-auto w-full space-y-6">
+    <div class="border-b border-slate-800 pb-4">
+      <h2 class="text-xl font-bold text-slate-100">Système de Clé API & Endpoints HTTP</h2>
+      <p class="text-xs text-slate-400 mt-1">Gérez votre clé API et intégrez les commandes d&#39;enregistrement avec vos scripts, Stream Deck ou automatisations.</p>
+    </div>
+
+    <!-- API Key Management Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
+      <h3 class="font-semibold text-md text-slate-200 flex items-center gap-2">
+        <span class="text-base leading-none">🔑</span>
+        Clé API d&#39;Authentification
+      </h3>
+
+      <div class="flex items-center gap-3">
+        <div class="relative flex-1">
+          <input type="password" id="api-key-input" class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono text-cyan-400 focus:outline-none focus:border-cyan-500">
+          <button onclick="toggleApiKeyVisibility()" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200">
+            <span id="eye-icon" class="text-base leading-none">👁️</span>
+          </button>
+        </div>
+        <button onclick="saveApiKey()" class="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold px-4 py-2.5 rounded-lg text-xs transition">
+          Mettre à jour la Clé
+        </button>
+      </div>
+      <p class="text-xs text-slate-400">Pour vous authentifier auprès de l&#39;API, fournissez cette clé via le header <code class="text-cyan-400 font-mono">X-API-Key: &lt;votre_clé&gt;</code>.</p>
+    </div>
+
+    <!-- API Endpoints List Card -->
+    <div class="space-y-4">
+      <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Endpoints Disponibles</h3>
+
+      <!-- Endpoint 1: Start Recording -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs px-2.5 py-1 rounded border border-emerald-500/30">POST</span>
+            <span class="font-mono text-sm font-bold text-slate-100">/api/record/start</span>
+          </div>
+          <button onclick="testApiEndpoint('start')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-1.5 rounded border border-slate-700 transition">
+            Tester la requête
+          </button>
+        </div>
+        <p class="text-xs text-slate-400">Démarre l&#39;enregistrement en continu de la source NDI active.</p>
+        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
+          curl -X POST "http://localhost:3000/api/record/start" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
+        </div>
+      </div>
+
+      <!-- Endpoint 2: Stop Recording -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs px-2.5 py-1 rounded border border-emerald-500/30">POST</span>
+            <span class="font-mono text-sm font-bold text-slate-100">/api/record/stop</span>
+          </div>
+          <button onclick="testApiEndpoint('stop')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-1.5 rounded border border-slate-700 transition">
+            Tester la requête
+          </button>
+        </div>
+        <p class="text-xs text-slate-400">Arrête l&#39;enregistrement continu en cours et exporte la vidéo vers le répertoire Fireshare.</p>
+        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
+          curl -X POST "http://localhost:3000/api/record/stop" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
+        </div>
+      </div>
+
+      <!-- Endpoint 3: Save Replay -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs px-2.5 py-1 rounded border border-emerald-500/30">POST</span>
+            <span class="font-mono text-sm font-bold text-slate-100">/api/replay/save?minutes={X}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" id="test-replay-mins" min="1" max="60" value="5" class="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200">
+            <button onclick="testApiEndpoint('replay')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-1.5 rounded border border-slate-700 transition">
+              Sauvegarder Replay
+            </button>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Exporte instantanément les X dernières minutes conservées en RAM buffer vers un fichier vidéo MP4.</p>
+        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
+          curl -X POST "http://localhost:3000/api/replay/save?minutes=5" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
+        </div>
+      </div>
+    </div>
+
+    <!-- Stream Deck Integration Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
+      <h3 class="font-semibold text-md text-slate-200 flex items-center gap-2">
+        <span class="text-base leading-none">🎛️</span>
+        Contrôler avec un Stream Deck
+      </h3>
+      <p class="text-xs text-slate-400">Vous utilisez un Elgato Stream Deck pour piloter vos enregistrements ? Installez le plugin officiel <a href="https://marketplace.elgato.com/product/web-requests-d7d46868-f9c8-4fa5-b775-ab3b9a7c8add" target="_blank" rel="noopener" class="text-cyan-400 hover:text-cyan-300 underline">Web Requests</a> et associez vos touches aux endpoints ci-dessus avec votre clé API.</p>
+    </div>
+  </main>`;
+
 export function getDashboardHtml() {
   return `<!DOCTYPE html>
 <html lang="fr" class="dark">
@@ -5,7 +102,7 @@ export function getDashboardHtml() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NDI DockRecorder</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/vendor/tailwindcss.min.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -36,15 +133,15 @@ export function getDashboardHtml() {
     <!-- Navigation Tabs -->
     <nav class="flex items-center gap-2 bg-slate-950/70 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
       <button type="button" id="nav-btn-dashboard" onclick="switchPage('dashboard')" class="px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center gap-2 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+        <span class="text-sm leading-none">🏠</span>
         Tableau de Bord
       </button>
       <button type="button" id="nav-btn-settings" onclick="switchPage('settings')" class="px-4 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 flex items-center gap-2 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <span class="text-sm leading-none">⚙️</span>
         Paramètres & Profils
       </button>
       <button type="button" id="nav-btn-apidocs" onclick="switchPage('apidocs')" class="px-4 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 flex items-center gap-2 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <span class="text-sm leading-none">📚</span>
         Clé API & Docs
       </button>
     </nav>
@@ -64,12 +161,18 @@ export function getDashboardHtml() {
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-lg flex items-center gap-2">
-            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            <span class="text-lg leading-none">🎥</span>
             Source NDI Active
           </h2>
-          <span id="badge-live" class="bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span> LIVE
-          </span>
+          <div class="flex items-center gap-2">
+            <span id="badge-active-profile" title="" class="hidden bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+              <span class="text-sm leading-none">👤</span>
+              Profil actif : <span id="badge-active-profile-name">--</span>
+            </span>
+            <span id="badge-live" class="bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span> LIVE
+            </span>
+          </div>
         </div>
 
         <!-- Live Preview Image Container -->
@@ -103,7 +206,7 @@ export function getDashboardHtml() {
             <p class="text-xs text-slate-400">Sauvegarder instantanément les X dernières minutes.</p>
           </div>
           <button id="btn-save-replay" onclick="saveReplayClip()" class="mt-4 w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-3 px-4 rounded-lg shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="text-base leading-none">💾</span>
             Sauvegarder Replay (5 Min)
           </button>
         </div>
@@ -143,7 +246,7 @@ export function getDashboardHtml() {
         <p class="text-xs text-slate-400 mt-1">Créez et configurez plusieurs profils d'enregistrement associes à vos sources NDI.</p>
       </div>
       <button onclick="createNewProfile()" class="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-1.5 shadow-lg shadow-cyan-600/20">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span class="text-sm leading-none">➕</span>
         Nouveau Profil
       </button>
     </div>
@@ -225,93 +328,7 @@ export function getDashboardHtml() {
     </div>
   </main>
 
-  <!-- PAGE 3: API DOCS & KEY -->
-  <main id="page-apidocs" class="hidden flex-1 p-6 max-w-5xl mx-auto w-full space-y-6">
-    <div class="border-b border-slate-800 pb-4">
-      <h2 class="text-xl font-bold text-slate-100">Système de Clé API & Endpoints HTTP</h2>
-      <p class="text-xs text-slate-400 mt-1">Gérez votre clé API et intégrez les commandes d&#39;enregistrement avec vos scripts, Stream Deck ou automatisations.</p>
-    </div>
-
-    <!-- API Key Management Card -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
-      <h3 class="font-semibold text-md text-slate-200 flex items-center gap-2">
-        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
-        Clé API d&#39;Authentification
-      </h3>
-
-      <div class="flex items-center gap-3">
-        <div class="relative flex-1">
-          <input type="password" id="api-key-input" class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono text-cyan-400 focus:outline-none focus:border-cyan-500">
-          <button onclick="toggleApiKeyVisibility()" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200">
-            <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-          </button>
-        </div>
-        <button onclick="saveApiKey()" class="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold px-4 py-2.5 rounded-lg text-xs transition">
-          Mettre à jour la Clé
-        </button>
-      </div>
-      <p class="text-xs text-slate-400">Pour vous authentifier auprès de l&#39;API, fournissez cette clé via le header <code class="text-cyan-400 font-mono">X-API-Key: &lt;votre_clé&gt;</code>.</p>
-    </div>
-
-    <!-- API Endpoints List Card -->
-    <div class="space-y-4">
-      <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Endpoints Disponibles</h3>
-
-      <!-- Endpoint 1: Start Recording -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs px-2.5 py-1 rounded border border-emerald-500/30">POST</span>
-            <span class="font-mono text-sm font-bold text-slate-100">/api/record/start</span>
-          </div>
-          <button onclick="testApiEndpoint('start')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-1.5 rounded border border-slate-700 transition">
-            Tester la requête
-          </button>
-        </div>
-        <p class="text-xs text-slate-400">Démarre l&#39;enregistrement en continu de la source NDI active.</p>
-        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
-          curl -X POST "http://localhost:3000/api/record/start" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
-        </div>
-      </div>
-
-      <!-- Endpoint 2: Stop Recording -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs px-2.5 py-1 rounded border border-emerald-500/30">POST</span>
-            <span class="font-mono text-sm font-bold text-slate-100">/api/record/stop</span>
-          </div>
-          <button onclick="testApiEndpoint('stop')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-1.5 rounded border border-slate-700 transition">
-            Tester la requête
-          </button>
-        </div>
-        <p class="text-xs text-slate-400">Arrête l&#39;enregistrement continu en cours et exporte la vidéo vers le répertoire Fireshare.</p>
-        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
-          curl -X POST "http://localhost:3000/api/record/stop" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
-        </div>
-      </div>
-
-      <!-- Endpoint 3: Save Replay -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs px-2.5 py-1 rounded border border-emerald-500/30">POST</span>
-            <span class="font-mono text-sm font-bold text-slate-100">/api/replay/save?minutes={X}</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <input type="number" id="test-replay-mins" min="1" max="60" value="5" class="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-slate-200">
-            <button onclick="testApiEndpoint('replay')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-1.5 rounded border border-slate-700 transition">
-              Sauvegarder Replay
-            </button>
-          </div>
-        </div>
-        <p class="text-xs text-slate-400">Exporte instantanément les X dernières minutes conservées en RAM buffer vers un fichier vidéo MP4.</p>
-        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
-          curl -X POST "http://localhost:3000/api/replay/save?minutes=5" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
-        </div>
-      </div>
-    </div>
-  </main>
+${API_DOCS_PAGE}
 
   <script>
     let activeSourceName = "";
@@ -520,6 +537,21 @@ export function getDashboardHtml() {
         activeSourceName = data.activeSource || "";
         const overlayLabel = document.getElementById('source-label-overlay');
         overlayLabel.textContent = activeSourceName ? activeSourceName + ' \u2022 1080p60 NDI' : 'Aucune source NDI d\u00e9tect\u00e9e sur le r\u00e9seau';
+
+        const profileList = Object.values(currentConfig.sourceProfiles || {});
+        const sourceProfiles = profileList.filter(p => p.source === activeSourceName);
+        const activeProfile = sourceProfiles.find(p => p.autoRecord) || sourceProfiles[0];
+        const profileBadge = document.getElementById('badge-active-profile');
+        const profileBadgeName = document.getElementById('badge-active-profile-name');
+        if (profileBadge && profileBadgeName) {
+          if (activeProfile) {
+            profileBadge.classList.remove('hidden');
+            profileBadgeName.textContent = activeProfile.name;
+            profileBadge.title = (activeProfile.bitrateMbps || '--') + ' Mbps \u2022 ' + (activeProfile.encoder || '--') + (activeProfile.autoRecord ? ' \u2022 Auto-record' : '');
+          } else {
+            profileBadge.classList.add('hidden');
+          }
+        }
 
         const fpsBadge = document.getElementById('preview-fps-badge');
         if (fpsBadge) {
