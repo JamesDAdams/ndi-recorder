@@ -1,0 +1,15 @@
+{
+  "name": "ndi-dockrecorder",
+  "version": "1.0.0",
+  "description": "Headless Docker NDI recorder with replay buffer, Stream Deck integration and Fireshare output",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "build": "./scripts/build-ndi-capture.sh",
+    "start": "node --experimental-sqlite src/index.mjs",
+    "test": "rm -f tmp_test_settings.db && SETTINGS_DB=./tmp_test_settings.db node --experimental-sqlite --test tests/*.test.mjs"
+  },
+  "keywords": ["ndi", "docker", "replay-buffer", "stream-deck", "fireshare"],
+  "author": "OpenFox",
+  "license": "MIT"
+}

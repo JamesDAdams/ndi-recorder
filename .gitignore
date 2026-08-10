@@ -1,0 +1,14 @@
+node_modules/
+bin/
+recordings/
+tmp_recordings/
+tmp_test_buffer/
+config/
+coverage/
+.openfox/
+*.log
+.DS_Store
+settings.db
+tmp_test_settings.db
+smoke_settings.db
+

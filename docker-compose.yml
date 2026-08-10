@@ -1,0 +1,18 @@
+services:
+  ndi-dockrecorder:
+    build: .
+    container_name: ndi-dockrecorder
+    ports:
+      - "3000:3000"
+    # Host networking (network_mode: host) is required for NDI mDNS/multicast on Linux hosts
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - REPLAY_BUFFER_MINUTES=5
+      - RECORDING_DIR=/media/fireshare/watch
+      - NDI_ACCESS_IPS=192.168.1.129,192.168.1.100,192.168.1.200
+    tmpfs:
+      - /tmp/replay_buffer:size=2G,mode=777
+    volumes:
+      - ./recordings:/media/fireshare/watch
+      - ./config:/app/config
