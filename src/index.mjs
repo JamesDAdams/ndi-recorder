@@ -380,10 +380,11 @@ class NdiRecorderServer {
     const filename = this.exporter.generateFilename(currentSource, prefix, 'clip');
     const outputPath = this.exporter.getOutputPath(filename, currentSource, 'clip');
     const result = this.replayBuffer.saveReplay(outputPath, minutes);
+    const duration = (result && result.duration) ? result.duration : minutes * 60;
 
     const clip = {
       filename,
-      duration: minutes * 60,
+      duration,
       timestamp: new Date().toISOString(),
       type: 'clip'
     };
@@ -397,7 +398,7 @@ class NdiRecorderServer {
         filename,
         filePath: outputPath,
         minutes,
-        duration: minutes * 60,
+        duration,
         source: currentSource,
         sizeBytes
       });
@@ -405,7 +406,7 @@ class NdiRecorderServer {
 
     this.exporter.notifyFireshare(filename);
 
-    return { success: true, filename, result };
+    return { success: true, filename, minutes, duration, result };
   }
 
   captureNdiPreview(sourceName, callback) {
@@ -669,6 +670,16 @@ class NdiRecorderServer {
 
     if (pathname === '/api/streamdeck/clip-5min' && req.method === 'POST') {
       const result = this.saveReplay(5, 'STREAMDECK');
+      return res.end(JSON.stringify(result));
+    }
+
+    if (pathname === '/api/streamdeck/clip' && req.method === 'POST') {
+      const mins = parseInt(parsed.query.minutes || 5, 10);
+      if (![5, 10, 15].includes(mins)) {
+        res.writeHead(400);
+        return res.end(JSON.stringify({ error: 'Invalid minutes: must be 5, 10 or 15' }));
+      }
+      const result = this.saveReplay(mins, 'STREAMDECK');
       return res.end(JSON.stringify(result));
     }
 

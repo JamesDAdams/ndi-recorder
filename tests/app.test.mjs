@@ -82,6 +82,15 @@ test('4. Stream Deck Remote Integration (REST API endpoints)', async () => {
   const clipData = await resClip.json();
   assert.strictEqual(clipData.success, true);
 
+  // Test generic clip endpoint with minutes param
+  const resClip10 = await fetch(`http://localhost:${port}/api/streamdeck/clip?minutes=10`, { method: 'POST' });
+  const clipData10 = await resClip10.json();
+  assert.strictEqual(clipData10.success, true);
+
+  // Invalid minutes rejected with 400
+  const resClipBad = await fetch(`http://localhost:${port}/api/streamdeck/clip?minutes=99`, { method: 'POST' });
+  assert.strictEqual(resClipBad.status, 400);
+
   app.close();
 });
 

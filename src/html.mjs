@@ -205,10 +205,11 @@ export function getDashboardHtml() {
             <h3 class="font-semibold text-sm text-slate-300 mb-1">Replay Buffer (RAM)</h3>
             <p class="text-xs text-slate-400">Sauvegarder instantanément les X dernières minutes.</p>
           </div>
-          <button id="btn-save-replay" onclick="saveReplayClip()" class="mt-4 w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-3 px-4 rounded-lg shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2">
-            <span class="text-base leading-none">💾</span>
-            Sauvegarder Replay (5 Min)
-          </button>
+          <div class="mt-4 grid grid-cols-3 gap-2">
+            <button onclick="saveReplayClip(5)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">Sauvegarder 5m</button>
+            <button onclick="saveReplayClip(10)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">Sauvegarder 10m</button>
+            <button onclick="saveReplayClip(15)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">Sauvegarder 15m</button>
+          </div>
         </div>
 
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg p-4 flex flex-col justify-between">
@@ -691,8 +692,16 @@ ${API_DOCS_PAGE}
       fetchStatus();
     }
 
-    async function saveReplayClip() {
-      await fetch('/api/streamdeck/clip-5min', { method: 'POST' });
+    async function saveReplayClip(minutes) {
+      const res = await fetch('/api/streamdeck/clip?minutes=' + (minutes || 5), { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.duration && data.duration < minutes * 60) {
+          alert('Seulement ' + Math.round(data.duration / 60) + ' min de replay disponibles (demande : ' + minutes + ' min)');
+        }
+      } else {
+        alert('Erreur lors de la sauvegarde du replay');
+      }
       fetchStatus();
     }
 

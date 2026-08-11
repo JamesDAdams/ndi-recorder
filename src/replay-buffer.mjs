@@ -66,8 +66,14 @@ export class ReplayBuffer {
     }
 
     const cutoff = Date.now() - (minutes * 60 * 1000);
-    const selectedSegments = this.segments.filter(s => s.timestamp >= cutoff);
-    
+    const selectedSegments = this.segments.filter(s => s.timestamp >= cutoff);    
+    let duration = minutes * 60;
+    if (selectedSegments.length > 0) {
+      const newest = selectedSegments[selectedSegments.length - 1].timestamp;
+      const oldest = selectedSegments[0].timestamp;
+      duration = Math.min(duration, Math.max(1, Math.round((newest - oldest) / 1000)));
+    }
+
     const targetDir = path.dirname(outputFilePath);
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -81,6 +87,7 @@ export class ReplayBuffer {
     fs.writeFileSync(outputFilePath, Buffer.concat(concatenatedContent));
     return {
       success: true,
+      duration,
       segmentsCount: selectedSegments.length,
       file: outputFilePath
     };
