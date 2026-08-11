@@ -18,6 +18,7 @@ export function getAvailableEncoders() {
 
 export const defaultConfig = {
   selectedSource: 'GAMINGPC (NVIDIA GeForce RTX 3070 1)',
+  previewEnabled: true,
   autoRecordOnNdi: true,
   replayBufferMinutes: 5,
   apiKey: process.env.API_KEY || 'ndi_secret_key_12345',

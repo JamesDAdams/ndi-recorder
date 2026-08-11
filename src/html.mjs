@@ -1,3 +1,5 @@
+import { getConfig } from './config.mjs';
+
 const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
   <main id="page-apidocs" class="hidden flex-1 p-6 max-w-5xl mx-auto w-full space-y-6">
     <div class="border-b border-slate-800 pb-4">
@@ -96,6 +98,10 @@ const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
   </main>`;
 
 export function getDashboardHtml() {
+  const previewEnabled = getConfig().previewEnabled !== false;
+  const previewBtnStateCls = previewEnabled
+    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+    : 'bg-slate-700/30 text-slate-400 border-slate-600/40 hover:bg-slate-700/50';
   return `<!DOCTYPE html>
 <html lang="fr" class="dark">
 <head>
@@ -165,6 +171,10 @@ export function getDashboardHtml() {
             Source NDI Active
           </h2>
           <div class="flex items-center gap-2">
+            <button type="button" id="btn-toggle-preview" onclick="togglePreview()" class="${previewBtnStateCls} text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition border">
+              <span class="text-sm leading-none">👁️</span>
+              Preview : <span id="btn-toggle-preview-label">${previewEnabled ? 'ON' : 'OFF'}</span>
+            </button>
             <span id="badge-active-profile" title="" class="hidden bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
               <span class="text-sm leading-none">👤</span>
               Profil actif : <span id="badge-active-profile-name">--</span>
@@ -177,7 +187,15 @@ export function getDashboardHtml() {
 
         <!-- Live Preview Image Container -->
         <div class="aspect-video bg-slate-950 rounded-lg border border-slate-800 relative overflow-hidden flex items-center justify-center">
-          <img id="preview-img" src="/api/preview.mjpeg" alt="NDI Live Stream Preview" class="w-full h-full object-cover rounded-lg" />
+          <img id="preview-img" ${previewEnabled ? 'src="/api/preview.mjpeg"' : ''} alt="NDI Live Stream Preview" class="w-full h-full object-cover rounded-lg ${previewEnabled ? '' : 'hidden'}" />
+
+          <div id="preview-disabled-overlay" class="${previewEnabled ? 'hidden' : ''} absolute inset-0 flex items-center justify-center bg-slate-950/90">
+            <div class="text-center">
+              <div class="text-3xl mb-2">🚫</div>
+              <div class="text-sm font-semibold text-slate-300">Preview d\u00e9sactiv\u00e9e</div>
+              <div class="text-xs text-slate-500 mt-1">Activez le bouton Preview pour r\u00e9afficher le flux</div>
+            </div>
+          </div>
 
           <div class="absolute top-3 right-3 bg-slate-950/85 backdrop-blur border border-slate-800 px-2.5 py-1 rounded-lg text-xs font-mono text-cyan-400 shadow-lg flex items-center gap-1.5">
             <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
@@ -190,10 +208,10 @@ export function getDashboardHtml() {
           </div>
         </div>
 
-        <!-- Clean Source Selector Dropdown -->
+        <!-- Profile Selector Dropdown -->
         <div class="mt-4">
-          <select id="source-select" onchange="changeSource(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono">
-            <option value="">Aucune source NDI détectée sur le réseau</option>
+          <select id="source-select" onchange="changeProfile(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono">
+            <option value="">Aucun profil configuré</option>
           </select>
         </div>
       </div>
@@ -350,6 +368,15 @@ ${API_DOCS_PAGE}
     let currentAvailableEncoders = ['libx264'];
     let activeProfileId = null;
     let profileFormDirty = false;
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function switchPage(pageId) {
       const pages = ['dashboard', 'settings', 'apidocs'];
@@ -556,6 +583,7 @@ ${API_DOCS_PAGE}
         if (data.availableEncoders) {
           currentAvailableEncoders = data.availableEncoders;
         }
+        updatePreviewUi();
 
         activeSourceName = data.activeSource || "";
         const overlayLabel = document.getElementById('source-label-overlay');
@@ -607,16 +635,23 @@ ${API_DOCS_PAGE}
         const profSourceSelect = document.getElementById('prof-source-select');
         const currentProfSourceVal = profSourceSelect ? profSourceSelect.value : "";
 
-        if (data.sources && data.sources.length > 0) {
-          select.innerHTML = data.sources.map(src =>
-            '<option value="' + src + '" ' + (src === activeSourceName ? 'selected' : '') + '>' + src + '</option>'
+        const profileEntries = Object.entries(currentConfig.sourceProfiles || {});
+        if (profileEntries.length > 0) {
+          const profiles = currentConfig.sourceProfiles;
+          const selectedProfileId = (activeProfileId && profiles[activeProfileId] && profiles[activeProfileId].source === activeSourceName)
+            ? activeProfileId
+            : (activeProfile ? activeProfile.id : null);
+          let profileOptions = '<option value="" disabled' + (selectedProfileId ? '' : ' selected') + '>S\u00e9lectionner un profil...</option>';
+          profileOptions += profileEntries.map(([id, prof]) =>
+            '<option value="' + id + '" ' + (id === selectedProfileId ? 'selected' : '') + '>' + escapeHtml(prof.name || id) + ' \u2014 ' + escapeHtml(prof.source || 'source non assign\u00e9e') + '</option>'
           ).join('');
+          select.innerHTML = profileOptions;
+        }
 
-          if (profSourceSelect) {
-            profSourceSelect.innerHTML = data.sources.map(src =>
-              '<option value="' + src + '" ' + (src === (currentProfSourceVal || activeSourceName) ? 'selected' : '') + '>' + src + '</option>'
-            ).join('');
-          }
+        if (data.sources && data.sources.length > 0 && profSourceSelect) {
+          profSourceSelect.innerHTML = data.sources.map(src =>
+            '<option value="' + src + '" ' + (src === (currentProfSourceVal || activeSourceName) ? 'selected' : '') + '>' + src + '</option>'
+          ).join('');
         }
 
         // Update API Key UI
@@ -683,13 +718,68 @@ ${API_DOCS_PAGE}
         body: JSON.stringify({ selectedSource: sourceName })
       });
       const img = document.getElementById('preview-img');
-      if (img) img.src = '/api/preview.mjpeg?t=' + Date.now();
+      if (img && currentConfig.previewEnabled !== false) img.src = '/api/preview.mjpeg?t=' + Date.now();
       fetchStatus();
+    }
+
+    async function changeProfile(profileId) {
+      if (!profileId) return;
+      const profiles = currentConfig.sourceProfiles || {};
+      const prof = profiles[profileId];
+      if (!prof) return;
+      activeProfileId = profileId;
+      profileFormDirty = false;
+      renderProfilesList();
+      loadSelectedProfileToForm();
+      if (prof.source) {
+        await changeSource(prof.source);
+      } else {
+        fetchStatus();
+      }
     }
 
     async function toggleRecording() {
       await fetch('/api/streamdeck/toggle-rec', { method: 'POST' });
       fetchStatus();
+    }
+
+    async function togglePreview() {
+      const enabled = !(currentConfig.previewEnabled !== false);
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ previewEnabled: enabled })
+      });
+      fetchStatus();
+    }
+
+    function updatePreviewUi() {
+      const enabled = currentConfig.previewEnabled !== false;
+      const btn = document.getElementById('btn-toggle-preview');
+      const label = document.getElementById('btn-toggle-preview-label');
+      const img = document.getElementById('preview-img');
+      const overlay = document.getElementById('preview-disabled-overlay');
+      if (btn) {
+        btn.classList.toggle('bg-emerald-500/15', enabled);
+        btn.classList.toggle('text-emerald-300', enabled);
+        btn.classList.toggle('border-emerald-500/30', enabled);
+        btn.classList.toggle('hover:bg-emerald-500/25', enabled);
+        btn.classList.toggle('bg-slate-700/30', !enabled);
+        btn.classList.toggle('text-slate-400', !enabled);
+        btn.classList.toggle('border-slate-600/40', !enabled);
+        btn.classList.toggle('hover:bg-slate-700/50', !enabled);
+      }
+      if (label) label.textContent = enabled ? 'ON' : 'OFF';
+      if (img) {
+        if (enabled) {
+          if (!img.src || img.src.indexOf('/api/preview.mjpeg') === -1) {
+            img.src = '/api/preview.mjpeg?t=' + Date.now();
+          }
+        } else {
+          img.removeAttribute('src');
+        }
+      }
+      if (overlay) overlay.classList.toggle('hidden', enabled);
     }
 
     async function saveReplayClip(minutes) {

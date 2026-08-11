@@ -31,6 +31,8 @@ class PreviewStreamManager {
     this.onSignalChange = null;
     this.lastNotified = null;
     this.placeholderInterval = null;
+    this.enabled = true;
+    this.generation = 0;
 
     this.signalWatchInterval = setInterval(() => {
       if (!this.hasSignal) return;
@@ -55,6 +57,7 @@ class PreviewStreamManager {
   }
 
   start(sourceName) {
+    if (!this.enabled) return;
     if (this.activeSource === sourceName && this.captureProc) return;
     this.stopPipeline();
     this.isStopping = false;
@@ -68,11 +71,13 @@ class PreviewStreamManager {
     this.captureProc = spawn(ndiBin, ['--stream', sourceName], {
       env: { ...process.env, LD_LIBRARY_PATH: '/usr/local/lib:' + (process.env.LD_LIBRARY_PATH || '') }
     });
+    const gen = ++this.generation;
 
     this.captureProc.stdout.pause();
     let ffmpegStarted = false;
 
     this.captureProc.stderr.on('data', chunk => {
+      if (gen !== this.generation) return;
       const match = chunk.toString().match(/RES\s+(\d+)x(\d+)/);
       if (match && !ffmpegStarted) {
         ffmpegStarted = true;
@@ -81,11 +86,16 @@ class PreviewStreamManager {
       }
     });
 
-    this.captureProc.on('exit', () => this.scheduleRestart());
-    this.captureProc.on('error', () => this.scheduleRestart());
+    this.captureProc.on('exit', () => {
+      if (gen === this.generation) this.scheduleRestart();
+    });
+    this.captureProc.on('error', () => {
+      if (gen === this.generation) this.scheduleRestart();
+    });
   }
 
   startFfmpeg(videoSize) {
+    const gen = ++this.generation;
     const fps = (this.getFps && this.getFps()) ? String(this.getFps()) : '60';
     // Spawn FFmpeg to convert raw BGRA stream to low-latency MJPEG (720p matching NDI FPS) with zero-buffering flags
     this.ffmpegProc = spawn('ffmpeg', [
@@ -136,8 +146,12 @@ class PreviewStreamManager {
       }
     });
 
-    this.ffmpegProc.on('exit', () => this.scheduleRestart());
-    this.ffmpegProc.on('error', () => this.scheduleRestart());
+    this.ffmpegProc.on('exit', () => {
+      if (gen === this.generation) this.scheduleRestart();
+    });
+    this.ffmpegProc.on('error', () => {
+      if (gen === this.generation) this.scheduleRestart();
+    });
   }
 
   broadcastFrame(frame) {
@@ -251,6 +265,17 @@ class PreviewStreamManager {
     }
     this.stopPipeline();
     this.clients.clear();
+  }
+
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    if (!enabled) {
+      this.stopPipeline();
+      for (const client of this.clients) client.end();
+      this.clients.clear();
+      return;
+    }
+    this.start(this.getActiveSource());
   }
 }
 
@@ -549,6 +574,10 @@ class NdiRecorderServer {
 
     // Serve Live MJPEG NDI Stream endpoint
     if (pathname === '/api/preview.mjpeg' && (req.method === 'GET' || req.method === 'HEAD')) {
+      if (!this.config.previewEnabled) {
+        res.writeHead(404);
+        return res.end('Preview disabled');
+      }
       if (req.method === 'HEAD') {
         res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=mjpegboundary' });
         return res.end();
@@ -558,6 +587,10 @@ class NdiRecorderServer {
 
     // Serve Cached/Live single NDI Frame JPEG endpoint
     if (pathname === '/api/preview.jpg' && (req.method === 'GET' || req.method === 'HEAD')) {
+      if (!this.config.previewEnabled) {
+        res.writeHead(404);
+        return res.end('Preview disabled');
+      }
       if (req.method === 'HEAD') {
         res.writeHead(200, { 'Content-Type': 'image/jpeg' });
         return res.end();
@@ -650,6 +683,9 @@ class NdiRecorderServer {
           const newSettings = JSON.parse(body);
           const updated = updateConfig(newSettings);
           this.config = updated;
+          if (typeof newSettings.previewEnabled === 'boolean') {
+            this.previewStream.setEnabled(newSettings.previewEnabled);
+          }
           if (newSettings.selectedSource) {
             this.ndiManager.setSource(newSettings.selectedSource);
           }

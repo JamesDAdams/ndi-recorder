@@ -366,6 +366,56 @@ test('17. Per-Profile Output Directories (recordDir / clipDir)', () => {
   fs.rmSync('./tmp_recordings/clips', { recursive: true, force: true });
 });
 
+test('18. Preview enable/disable toggle (dashboard button + API)', async () => {
+  updateConfig({ previewEnabled: true });
+  const app = new NdiRecorderServer();
+  const server = app.listen(0);
+  const port = server.address().port;
+
+  const html = await (await fetch(`http://localhost:${port}/`)).text();
+  assert.ok(html.includes('btn-toggle-preview'));
+  assert.ok(html.includes('togglePreview('));
+
+  const resDisable = await fetch(`http://localhost:${port}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ previewEnabled: false })
+  });
+  assert.strictEqual(resDisable.status, 200);
+  const cfg = await resDisable.json();
+  assert.strictEqual(cfg.config.previewEnabled, false);
+  assert.strictEqual(app.previewStream.enabled, false);
+
+  const status = await (await fetch(`http://localhost:${port}/api/status`)).json();
+  assert.strictEqual(status.config.previewEnabled, false);
+
+  const resMjpeg = await fetch(`http://localhost:${port}/api/preview.mjpeg`);
+  assert.strictEqual(resMjpeg.status, 404);
+  const resJpg = await fetch(`http://localhost:${port}/api/preview.jpg`);
+  assert.strictEqual(resJpg.status, 404);
+
+  const resEnable = await fetch(`http://localhost:${port}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ previewEnabled: true })
+  });
+  assert.strictEqual(resEnable.status, 200);
+  const cfgOn = await resEnable.json();
+  assert.strictEqual(cfgOn.config.previewEnabled, true);
+  assert.strictEqual(app.previewStream.enabled, true);
+
+  const resMjpegOn = await fetch(`http://localhost:${port}/api/preview.mjpeg`, { method: 'HEAD' });
+  assert.strictEqual(resMjpegOn.status, 200);
+
+  updateConfig({ previewEnabled: false });
+  const app2 = new NdiRecorderServer();
+  assert.strictEqual(app2.config.previewEnabled, false);
+  app2.close();
+
+  updateConfig({ previewEnabled: true });
+  app.close();
+});
+
 test.after(() => {
   // Ensure process exits cleanly after node test suite finishes
   setImmediate(() => {
