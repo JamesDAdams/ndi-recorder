@@ -176,18 +176,21 @@ test('10. API Key Protection & Auto-Record Exclusivity per Source', async () => 
   const server = app.listen(0);
   const port = server.address().port;
 
+  const apiKey = getConfig().apiKey;
+  assert.ok(apiKey && apiKey.length >= 32);
+
   // Verify API Key auth protection
   const resNoAuth = await fetch(`http://localhost:${port}/api/record/start`, { method: 'POST' });
   assert.strictEqual(resNoAuth.status, 401);
 
   const resAuth = await fetch(`http://localhost:${port}/api/record/start`, {
     method: 'POST',
-    headers: { 'X-API-Key': 'ndi_secret_key_12345' }
+    headers: { 'X-API-Key': apiKey }
   });
   assert.strictEqual(resAuth.status, 200);
   await fetch(`http://localhost:${port}/api/record/stop`, {
     method: 'POST',
-    headers: { 'X-API-Key': 'ndi_secret_key_12345' }
+    headers: { 'X-API-Key': apiKey }
   });
 
   // Test Auto-record exclusivity for the same NDI source
@@ -488,6 +491,24 @@ test('20. Max record size auto-stops recording', async () => {
   assert.ok(last, 'recording should be logged');
 
   app.close();
+});
+
+test('21. API Key auto-generation at first launch & reset', async () => {
+  const cfg = getConfig();
+  assert.ok(cfg.apiKey, 'an API key must exist');
+  assert.ok(cfg.apiKey.length >= 32, 'generated key must be at least 32 chars');
+  assert.notStrictEqual(cfg.apiKey, 'ndi_secret_key_12345', 'legacy default must not be used');
+
+  const reloaded = await import('../src/config.mjs?apikey-reload=' + Date.now());
+  assert.strictEqual(reloaded.getConfig().apiKey, cfg.apiKey, 'persisted key must survive reload');
+
+  const newKey = reloaded.regenerateApiKey().apiKey;
+  assert.ok(newKey.length >= 32);
+  assert.notStrictEqual(newKey, cfg.apiKey, 'reset must produce a different key');
+  assert.strictEqual(reloaded.getConfig().apiKey, newKey);
+
+  const reloaded2 = await import('../src/config.mjs?apikey-reload2=' + Date.now());
+  assert.strictEqual(reloaded2.getConfig().apiKey, newKey, 'reset must be persisted');
 });
 
 test.after(() => {

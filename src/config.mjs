@@ -1,7 +1,14 @@
 import { execSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { loadSettings, saveSettings } from './db.mjs';
 
+const LEGACY_DEFAULT_API_KEY = 'ndi_secret_key_12345';
+
 let availableEncodersCache = null;
+
+export function generateApiKey() {
+  return randomBytes(32).toString('base64url');
+}
 
 export function getAvailableEncoders() {
   if (availableEncodersCache) return availableEncodersCache;
@@ -20,7 +27,7 @@ export const defaultConfig = {
   selectedSource: 'GAMINGPC (NVIDIA GeForce RTX 3070 1)',
   previewEnabled: true,
   replayBufferMinutes: 5,
-  apiKey: process.env.API_KEY || 'ndi_secret_key_12345',
+  apiKey: process.env.API_KEY || '',
   sourceProfiles: {
     'prof-1': {
       id: 'prof-1',
@@ -116,7 +123,18 @@ try {
   }
 } catch (e) {}
 
+if (!process.env.API_KEY && (!currentConfig.apiKey || currentConfig.apiKey === LEGACY_DEFAULT_API_KEY)) {
+  currentConfig.apiKey = generateApiKey();
+  saveSettings('config', currentConfig);
+}
+
 export function getConfig() {
+  return currentConfig;
+}
+
+export function regenerateApiKey() {
+  currentConfig.apiKey = generateApiKey();
+  saveSettings('config', currentConfig);
   return currentConfig;
 }
 

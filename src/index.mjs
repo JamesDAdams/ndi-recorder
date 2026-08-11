@@ -2,7 +2,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
-import { getConfig, updateConfig, getAvailableEncoders } from './config.mjs';
+import { getConfig, updateConfig, regenerateApiKey, getAvailableEncoders } from './config.mjs';
 import { logApiCall, insertRecording, insertReplaySave } from './db.mjs';
 import { NdiManager, resolveNdiCaptureBin } from './ndi.mjs';
 import { ReplayBuffer } from './replay-buffer.mjs';
@@ -711,6 +711,10 @@ class NdiRecorderServer {
       req.on('end', () => {
         try {
           const newSettings = JSON.parse(body);
+          if (newSettings.regenerateApiKey) {
+            this.config = regenerateApiKey();
+            return res.end(JSON.stringify({ success: true, config: this.config }));
+          }
           const updated = updateConfig(newSettings);
           this.config = updated;
           if (typeof newSettings.previewEnabled === 'boolean') {

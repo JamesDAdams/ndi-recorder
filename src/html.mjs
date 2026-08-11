@@ -16,13 +16,13 @@ const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
 
       <div class="flex items-center gap-3">
         <div class="relative flex-1">
-          <input type="password" id="api-key-input" class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono text-cyan-400 focus:outline-none focus:border-cyan-500">
+          <input type="password" id="api-key-input" readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-10 py-2.5 text-sm font-mono text-cyan-400 focus:outline-none focus:border-cyan-500">
           <button onclick="toggleApiKeyVisibility()" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200">
             <span id="eye-icon" class="text-base leading-none">👁️</span>
           </button>
         </div>
-        <button onclick="saveApiKey()" class="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold px-4 py-2.5 rounded-lg text-xs transition">
-          Mettre à jour la Clé
+        <button onclick="resetApiKey()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-lg text-xs transition border border-slate-700">
+          🔄 Réinitialiser
         </button>
       </div>
       <p class="text-xs text-slate-400">Pour vous authentifier auprès de l&#39;API, fournissez cette clé via le header <code class="text-cyan-400 font-mono">X-API-Key: &lt;votre_clé&gt;</code>.</p>
@@ -45,7 +45,7 @@ const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
         </div>
         <p class="text-xs text-slate-400">Démarre l&#39;enregistrement en continu de la source NDI active.</p>
         <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
-          curl -X POST "http://localhost:3000/api/record/start" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
+          curl -X POST "http://localhost:3000/api/record/start" -H "X-API-Key: <span class="text-cyan-400">&lt;VOTRE_CLÉ&gt;</span>"
         </div>
       </div>
 
@@ -62,7 +62,7 @@ const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
         </div>
         <p class="text-xs text-slate-400">Arrête l&#39;enregistrement continu en cours et exporte la vidéo vers le répertoire Fireshare.</p>
         <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
-          curl -X POST "http://localhost:3000/api/record/stop" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
+          curl -X POST "http://localhost:3000/api/record/stop" -H "X-API-Key: <span class="text-cyan-400">&lt;VOTRE_CLÉ&gt;</span>"
         </div>
       </div>
 
@@ -82,7 +82,7 @@ const API_DOCS_PAGE = `  <!-- PAGE 3: API DOCS & KEY -->
         </div>
         <p class="text-xs text-slate-400">Exporte instantanément les X dernières minutes conservées en RAM buffer vers un fichier vidéo MP4.</p>
         <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300 overflow-x-auto">
-          curl -X POST "http://localhost:3000/api/replay/save?minutes=5" -H "X-API-Key: <span class="api-key-display text-cyan-400">***</span>"
+          curl -X POST "http://localhost:3000/api/replay/save?minutes=5" -H "X-API-Key: <span class="text-cyan-400">&lt;VOTRE_CLÉ&gt;</span>"
         </div>
       </div>
     </div>
@@ -312,7 +312,7 @@ export function getDashboardHtml() {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Temps maximym clips (minutes)</label>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Temps maximum clips (minutes)</label>
             <input type="number" id="prof-ram-buffer" min="1" max="60" value="5" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
           </div>
 
@@ -683,9 +683,6 @@ ${API_DOCS_PAGE}
           if (apiKeyInput && !apiKeyInput.getAttribute('data-user-editing')) {
             apiKeyInput.value = currentConfig.apiKey;
           }
-          document.querySelectorAll('.api-key-display').forEach(el => {
-            el.textContent = currentConfig.apiKey;
-          });
         }
 
         // Select initial profile if none active
@@ -827,16 +824,26 @@ ${API_DOCS_PAGE}
       }
     }
 
-    async function saveApiKey() {
-      const keyInput = document.getElementById('api-key-input');
-      const newKey = keyInput ? keyInput.value.trim() : '';
-      if (!newKey) return;
-      await fetch('/api/config', {
+    async function resetApiKey() {
+      const confirmed = confirm('La réinitialisation remplacera la clé actuelle et invalidera tous vos scripts, automatisations et intégrations Stream Deck. Continuer ?');
+      if (!confirmed) return;
+      const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: newKey })
+        body: JSON.stringify({ regenerateApiKey: true })
       });
-      keyInput.removeAttribute('data-user-editing');
+      const data = res.ok ? await res.json() : null;
+      const newKey = data?.config?.apiKey;
+      const keyInput = document.getElementById('api-key-input');
+      if (!newKey) {
+        alert('Erreur lors de la réinitialisation de la clé API.');
+        return;
+      }
+      if (keyInput) {
+        keyInput.value = newKey;
+        keyInput.type = 'text';
+        keyInput.removeAttribute('data-user-editing');
+      }
       fetchStatus();
     }
 
