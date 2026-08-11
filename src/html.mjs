@@ -220,13 +220,13 @@ export function getDashboardHtml() {
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg p-4 flex flex-col justify-between">
           <div>
-            <h3 class="font-semibold text-sm text-slate-300 mb-1">Replay Buffer (RAM)</h3>
+            <h3 class="font-semibold text-sm text-slate-300 mb-1">Clip</h3>
             <p class="text-xs text-slate-400">Sauvegarder instantanément les X dernières minutes.</p>
           </div>
           <div class="mt-4 grid grid-cols-3 gap-2">
-            <button onclick="saveReplayClip(5)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">Sauvegarder 5m</button>
-            <button onclick="saveReplayClip(10)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">Sauvegarder 10m</button>
-            <button onclick="saveReplayClip(15)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">Sauvegarder 15m</button>
+            <button onclick="saveReplayClip(5)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">5m</button>
+            <button onclick="saveReplayClip(10)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">10m</button>
+            <button onclick="saveReplayClip(15)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">15m</button>
           </div>
         </div>
 
