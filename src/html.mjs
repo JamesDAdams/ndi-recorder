@@ -107,7 +107,7 @@ export function getDashboardHtml() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NDI DockRecorder</title>
+  <title>NDI Recorder</title>
   <script src="/vendor/tailwindcss.min.js"></script>
   <script>
     tailwind.config = {
@@ -132,7 +132,7 @@ export function getDashboardHtml() {
   <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex flex-col md:flex-row items-center justify-between gap-4">
     <div class="flex items-center gap-3">
       <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
-      <h1 class="text-xl font-bold tracking-tight text-cyan-400">NDI DockRecorder</h1>
+      <h1 class="text-xl font-bold tracking-tight text-cyan-400">NDI Recorder</h1>
       <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">Docker Headless</span>
     </div>
 
@@ -325,13 +325,24 @@ export function getDashboardHtml() {
         </div>
 
         <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Qualité d&#39;Enregistrement</label>
+          <select id="prof-quality" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500" onchange="onQualityChange(this)">
+            <option value="source">Source (brut)</option>
+            <option value="1080p">1080p</option>
+            <option value="1440p">1440p</option>
+            <option value="4k">4K</option>
+          </select>
+        </div>
+
+        <div>
           <label class="block text-xs font-semibold text-slate-400 mb-1">Débit Encodeur (Bitrate)</label>
-          <input type="range" id="prof-bitrate" min="5" max="50" value="12" oninput="document.getElementById('prof-bitrate-val').textContent = this.value + ' Mbps'" class="w-full accent-cyan-400">
+          <input type="range" id="prof-bitrate" min="5" max="50" value="12" oninput="onBitrateInput(this)" class="w-full accent-cyan-400">
           <div class="flex justify-between text-xs text-slate-500 mt-1">
             <span>5 Mbps</span>
             <span id="prof-bitrate-val" class="text-cyan-400 font-mono">12 Mbps</span>
             <span>50 Mbps</span>
           </div>
+          <p class="text-[11px] text-slate-500 mt-1">≈ <span id="prof-bitrate-hourly" class="font-mono text-cyan-400">5.4 GB</span> / heure d&#39;enregistrement</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -485,6 +496,8 @@ ${API_DOCS_PAGE}
       const bitrateInput = document.getElementById('prof-bitrate');
       bitrateInput.value = prof.bitrateMbps || 12;
       document.getElementById('prof-bitrate-val').textContent = (prof.bitrateMbps || 12) + ' Mbps';
+      updateBitrateEstimate(prof.bitrateMbps || 12);
+      document.getElementById('prof-quality').value = prof.recordQuality || 'source';
 
       document.getElementById('prof-record-dir').value = prof.recordDir || '';
       document.getElementById('prof-clip-dir').value = prof.clipDir || '';
@@ -527,6 +540,7 @@ ${API_DOCS_PAGE}
         replayBufferMinutes: 5,
         bitrateMbps: 12,
         encoder: 'libx264',
+        recordQuality: 'source',
         recordDir: '',
         clipDir: '',
         maxRecordSizeMb: 0,
@@ -542,6 +556,29 @@ ${API_DOCS_PAGE}
       loadSelectedProfileToForm();
     }
 
+    const QUALITY_BITRATES = { source: null, '1080p': 12, '1440p': 20, '4k': 35 };
+
+    function onQualityChange(select) {
+      const rec = QUALITY_BITRATES[select.value];
+      if (!rec) return;
+      const input = document.getElementById('prof-bitrate');
+      input.value = rec;
+      onBitrateInput(input);
+    }
+
+    function onBitrateInput(input) {
+      const mbps = parseInt(input.value) || 0;
+      document.getElementById('prof-bitrate-val').textContent = mbps + ' Mbps';
+      updateBitrateEstimate(mbps);
+    }
+
+    function updateBitrateEstimate(mbps) {
+      const el = document.getElementById('prof-bitrate-hourly');
+      if (!el) return;
+      const gb = mbps * 1000000 / 8 * 3600 / 1e9;
+      el.textContent = gb.toFixed(1) + ' GB';
+    }
+
     async function saveCurrentProfile() {
       if (!activeProfileId) return;
       const name = document.getElementById('prof-name').value;
@@ -550,6 +587,7 @@ ${API_DOCS_PAGE}
       const ramBuffer = parseInt(document.getElementById('prof-ram-buffer').value);
       const bitrate = parseInt(document.getElementById('prof-bitrate').value);
       const encoder = document.getElementById('prof-encoder').value;
+      const quality = document.getElementById('prof-quality').value;
       const recordDir = document.getElementById('prof-record-dir').value.trim();
       const clipDir = document.getElementById('prof-clip-dir').value.trim();
       const maxRecordSizeMb = Math.max(0, parseInt(document.getElementById('prof-max-record-size').value) || 0);
@@ -564,6 +602,7 @@ ${API_DOCS_PAGE}
         replayBufferMinutes: ramBuffer,
         bitrateMbps: bitrate,
         encoder,
+        recordQuality: quality,
         recordDir,
         clipDir,
         maxRecordSizeMb,
@@ -890,7 +929,7 @@ ${API_DOCS_PAGE}
         keyInput.addEventListener('input', () => keyInput.setAttribute('data-user-editing', 'true'));
       }
 
-      ['prof-name', 'prof-source-select', 'prof-auto-record', 'prof-ram-buffer', 'prof-bitrate', 'prof-encoder'].forEach(id => {
+      ['prof-name', 'prof-source-select', 'prof-auto-record', 'prof-ram-buffer', 'prof-bitrate', 'prof-encoder', 'prof-quality'].forEach(id => {
         const field = document.getElementById(id);
         if (field) {
           field.addEventListener('input', () => { profileFormDirty = true; });
