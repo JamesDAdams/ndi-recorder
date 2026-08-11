@@ -10,9 +10,19 @@ services:
       - PORT=3000
       - REPLAY_BUFFER_MINUTES=5
       - RECORDING_DIR=/media/fireshare/watch
+      - SETTINGS_DB=/app/data/settings.db
       - NDI_ACCESS_IPS=192.168.1.129,192.168.1.100,192.168.1.200
     tmpfs:
       - /tmp/replay_buffer:size=2G,mode=777
     volumes:
+      # Dossier de sortie par défaut (enregistrements + clips si les profils n'en définissent pas)
       - ./recordings:/media/fireshare/watch
+      # Persistance des profils & paramètres (dossiers par profil compris) — mount de DOSSIER :
+      # ./data est créé automatiquement par Docker au premier démarrage, settings.db vit dedans
+      - ./data:/app/data
       - ./config:/app/config
+      # Dossiers personnalisés par profil (facultatif) : montez-les ici, puis indiquez leur
+      # chemin dans le profil (ex. /media/fireshare/clips et /media/fireshare/records).
+      # Sinon, utilisez des sous-dossiers du volume déjà monté (ex. /media/fireshare/watch/clips).
+      # - ./clips:/media/fireshare/clips
+      # - ./records:/media/fireshare/records

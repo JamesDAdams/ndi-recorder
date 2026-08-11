@@ -13,8 +13,19 @@ export class FireshareExporter {
     return `${dateStr}_${safeSource}_${prefix}_${type}.mp4`;
   }
 
-  getOutputPath(filename) {
-    const outputDir = this.config.recordingDir || './recordings';
+  getProfileForSource(sourceName) {
+    if (!sourceName) return null;
+    const profiles = this.config.sourceProfiles || {};
+    return Object.values(profiles).find(p => p && p.source === sourceName) || null;
+  }
+
+  getOutputPath(filename, sourceName, type = 'full') {
+    let outputDir = this.config.recordingDir || './recordings';
+    const profile = this.getProfileForSource(sourceName);
+    if (profile) {
+      const profileDir = type === 'clip' ? profile.clipDir : profile.recordDir;
+      if (profileDir && profileDir.trim()) outputDir = profileDir;
+    }
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }

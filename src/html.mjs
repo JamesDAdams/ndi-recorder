@@ -169,8 +169,8 @@ export function getDashboardHtml() {
               <span class="text-sm leading-none">👤</span>
               Profil actif : <span id="badge-active-profile-name">--</span>
             </span>
-            <span id="badge-live" class="bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span> LIVE
+            <span id="badge-live" class="bg-slate-700/30 text-slate-400 border border-slate-600/40 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+              <span class="live-dot w-2 h-2 rounded-full bg-slate-500"></span> <span id="badge-live-label">HORS LIGNE</span>
             </span>
           </div>
         </div>
@@ -316,6 +316,19 @@ export function getDashboardHtml() {
           </div>
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Dossier Enregistrements (full)</label>
+            <input type="text" id="prof-record-dir" placeholder="./recordings" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-cyan-500">
+            <p class="text-[11px] text-slate-500 mt-1">Vide = dossier global par défaut.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Dossier Clips (replay)</label>
+            <input type="text" id="prof-clip-dir" placeholder="./recordings" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-cyan-500">
+            <p class="text-[11px] text-slate-500 mt-1">Vide = dossier global par défaut.</p>
+          </div>
+        </div>
+
         <div class="flex justify-between items-center pt-3 border-t border-slate-800">
           <button id="btn-delete-profile" onclick="deleteCurrentProfile()" class="bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 font-bold px-4 py-2 rounded-lg text-xs transition">
             Supprimer ce profil
@@ -433,6 +446,9 @@ ${API_DOCS_PAGE}
       bitrateInput.value = prof.bitrateMbps || 12;
       document.getElementById('prof-bitrate-val').textContent = (prof.bitrateMbps || 12) + ' Mbps';
 
+      document.getElementById('prof-record-dir').value = prof.recordDir || '';
+      document.getElementById('prof-clip-dir').value = prof.clipDir || '';
+
       const profSourceSelect = document.getElementById('prof-source-select');
       if (profSourceSelect) profSourceSelect.value = prof.source || '';
 
@@ -468,7 +484,9 @@ ${API_DOCS_PAGE}
         autoRecord: false,
         replayBufferMinutes: 5,
         bitrateMbps: 12,
-        encoder: 'libx264'
+        encoder: 'libx264',
+        recordDir: '',
+        clipDir: ''
       };
 
       if (!currentConfig.sourceProfiles) currentConfig.sourceProfiles = {};
@@ -488,6 +506,8 @@ ${API_DOCS_PAGE}
       const ramBuffer = parseInt(document.getElementById('prof-ram-buffer').value);
       const bitrate = parseInt(document.getElementById('prof-bitrate').value);
       const encoder = document.getElementById('prof-encoder').value;
+      const recordDir = document.getElementById('prof-record-dir').value.trim();
+      const clipDir = document.getElementById('prof-clip-dir').value.trim();
 
       const sourceProfiles = {};
       sourceProfiles[activeProfileId] = {
@@ -497,7 +517,9 @@ ${API_DOCS_PAGE}
         autoRecord,
         replayBufferMinutes: ramBuffer,
         bitrateMbps: bitrate,
-        encoder
+        encoder,
+        recordDir,
+        clipDir
       };
 
       const res = await fetch('/api/config', {
@@ -537,6 +559,25 @@ ${API_DOCS_PAGE}
         activeSourceName = data.activeSource || "";
         const overlayLabel = document.getElementById('source-label-overlay');
         overlayLabel.textContent = activeSourceName ? activeSourceName + ' \u2022 1080p60 NDI' : 'Aucune source NDI d\u00e9tect\u00e9e sur le r\u00e9seau';
+
+        const liveBadge = document.getElementById('badge-live');
+        if (liveBadge) {
+          const isLive = !!data.isStreamActive;
+          const liveDot = liveBadge.querySelector('.live-dot');
+          const liveLabel = document.getElementById('badge-live-label');
+          liveBadge.classList.toggle('bg-emerald-500/20', isLive);
+          liveBadge.classList.toggle('text-emerald-400', isLive);
+          liveBadge.classList.toggle('border-emerald-500/30', isLive);
+          liveBadge.classList.toggle('bg-slate-700/30', !isLive);
+          liveBadge.classList.toggle('text-slate-400', !isLive);
+          liveBadge.classList.toggle('border-slate-600/40', !isLive);
+          if (liveDot) {
+            liveDot.classList.toggle('bg-emerald-400', isLive);
+            liveDot.classList.toggle('bg-slate-500', !isLive);
+            liveDot.classList.toggle('animate-ping', isLive);
+          }
+          if (liveLabel) liveLabel.textContent = isLive ? 'LIVE' : 'HORS LIGNE';
+        }
 
         const profileList = Object.values(currentConfig.sourceProfiles || {});
         const sourceProfiles = profileList.filter(p => p.source === activeSourceName);

@@ -29,7 +29,9 @@ export const defaultConfig = {
       autoRecord: true,
       replayBufferMinutes: 5,
       bitrateMbps: 12,
-      encoder: 'libx264'
+      encoder: 'libx264',
+      recordDir: '',
+      clipDir: ''
     }
   },
   recordingDir: process.env.RECORDING_DIR || './recordings',
@@ -71,7 +73,9 @@ function mergeConfig(base, newSettings) {
           autoRecord: false,
           replayBufferMinutes: 5,
           bitrateMbps: 12,
-          encoder: 'libx264'
+          encoder: 'libx264',
+          recordDir: '',
+          clipDir: ''
         };
         const merged = { ...existing, ...prof };
 

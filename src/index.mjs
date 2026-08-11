@@ -11,6 +11,8 @@ import { getDashboardHtml } from './html.mjs';
 
 const PORT = process.env.PORT || 3000;
 
+const PLACEHOLDER_JPEG_BASE64 = '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';
+
 class PreviewStreamManager {
   constructor(getNdiBin, getActiveSource, getFps) {
     this.getNdiBin = getNdiBin;
@@ -23,6 +25,33 @@ class PreviewStreamManager {
     this.ffmpegProc = null;
     this.restartTimeout = null;
     this.isStopping = false;
+    this.hasSignal = false;
+    this.lastFrameAt = 0;
+    this.restartDelay = 2000;
+    this.onSignalChange = null;
+    this.lastNotified = null;
+    this.placeholderInterval = null;
+
+    this.signalWatchInterval = setInterval(() => {
+      if (!this.hasSignal) return;
+      if (this.lastFrameAt && Date.now() - this.lastFrameAt > 5000) {
+        this.hasSignal = false;
+        this.notifySignal(false);
+      }
+    }, 1000);
+  }
+
+  notifySignal(active) {
+    if (this.lastNotified === active) return;
+    this.lastNotified = active;
+    if (this.onSignalChange) this.onSignalChange(active, this.activeSource);
+  }
+
+  markSignal() {
+    this.hasSignal = true;
+    this.lastFrameAt = Date.now();
+    this.restartDelay = 2000;
+    this.notifySignal(true);
   }
 
   start(sourceName) {
@@ -31,6 +60,7 @@ class PreviewStreamManager {
     this.isStopping = false;
     this.activeSource = sourceName;
     if (!sourceName) return;
+    if (this.clients.size === 0) return;
 
     const ndiBin = this.getNdiBin();
     if (!ndiBin) return;
@@ -46,6 +76,7 @@ class PreviewStreamManager {
       const match = chunk.toString().match(/RES\s+(\d+)x(\d+)/);
       if (match && !ffmpegStarted) {
         ffmpegStarted = true;
+        this.markSignal();
         this.startFfmpeg(match[1] + 'x' + match[2]);
       }
     });
@@ -92,6 +123,7 @@ class PreviewStreamManager {
         buffer = buffer.subarray(endIdx + 2);
 
         this.latestFrame = frame;
+        this.markSignal();
         this.broadcastFrame(frame);
 
         startIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]));
@@ -138,33 +170,56 @@ class PreviewStreamManager {
 
     this.clients.add(res);
 
-    if (this.latestFrame) {
+    if (this.hasSignal && this.latestFrame) {
       const header = Buffer.from(
         `--mjpegboundary\r\nContent-Type: image/jpeg\r\nContent-Length: ${this.latestFrame.length}\r\n\r\n`
       );
       res.write(header);
       res.write(this.latestFrame);
       res.write(Buffer.from('\r\n'));
+    } else {
+      this.broadcastPlaceholder();
     }
 
-    res.on('close', () => this.clients.delete(res));
+    if (!this.placeholderInterval) {
+      this.placeholderInterval = setInterval(() => {
+        if (this.clients.size > 0 && !this.hasSignal) this.broadcastPlaceholder();
+      }, 2000);
+    }
+
+    res.on('close', () => {
+      this.clients.delete(res);
+      if (this.clients.size === 0) {
+        this.stopPipeline();
+        if (this.placeholderInterval) {
+          clearInterval(this.placeholderInterval);
+          this.placeholderInterval = null;
+        }
+      }
+    });
 
     // Ensure pipeline is running for current active source
     const current = this.getActiveSource();
-    if (current && current !== this.activeSource) {
+    if (current && !this.captureProc) {
       this.start(current);
     }
+  }
+
+  broadcastPlaceholder() {
+    this.broadcastFrame(Buffer.from(PLACEHOLDER_JPEG_BASE64, 'base64'));
   }
 
   scheduleRestart() {
     if (this.isStopping) return;
     this.stopPipeline();
+    if (this.clients.size === 0) return;
     if (!this.restartTimeout) {
       this.restartTimeout = setTimeout(() => {
         this.restartTimeout = null;
         const current = this.getActiveSource();
-        if (current) this.start(current);
-      }, 2000);
+        if (current && this.clients.size > 0) this.start(current);
+      }, this.restartDelay);
+      this.restartDelay = Math.min(this.restartDelay * 2, 15000);
     }
   }
 
@@ -186,6 +241,14 @@ class PreviewStreamManager {
 
   stop() {
     this.isStopping = true;
+    if (this.signalWatchInterval) {
+      clearInterval(this.signalWatchInterval);
+      this.signalWatchInterval = null;
+    }
+    if (this.placeholderInterval) {
+      clearInterval(this.placeholderInterval);
+      this.placeholderInterval = null;
+    }
     this.stopPipeline();
     this.clients.clear();
   }
@@ -210,6 +273,15 @@ class NdiRecorderServer {
       () => this.ndiManager.activeSource || this.config.selectedSource,
       () => (this.config.video && this.config.video.fps) || 60
     );
+
+    this.previewStream.onSignalChange = (hasSignal, sourceName) => {
+      this.ndiManager.isStreamActive = hasSignal;
+      if (hasSignal) {
+        this.ndiManager.emit('ndiSignalDetected', sourceName);
+      } else {
+        this.ndiManager.emit('ndiSignalLost', sourceName);
+      }
+    };
 
     this.ndiManager.on('sourceChanged', (sourceName) => {
       this.previewStream.start(sourceName);
@@ -264,7 +336,7 @@ class NdiRecorderServer {
     this.recordingStartTime = Date.now();
     this.currentRecordingSource = currentSource;
     const filename = this.exporter.generateFilename(currentSource, prefix, 'full');
-    this.currentRecordingPath = this.exporter.getOutputPath(filename);
+    this.currentRecordingPath = this.exporter.getOutputPath(filename, currentSource, 'full');
 
     console.log(`[REC] Started recording to ${this.currentRecordingPath}`);
     return { success: true, filename, filePath: this.currentRecordingPath };
@@ -306,7 +378,7 @@ class NdiRecorderServer {
   saveReplay(minutes = 5, prefix = 'REPLAY') {
     const currentSource = this.ndiManager.activeSource || this.config.selectedSource || 'GAMINGPC (NVIDIA GeForce RTX 3070 1)';
     const filename = this.exporter.generateFilename(currentSource, prefix, 'clip');
-    const outputPath = this.exporter.getOutputPath(filename);
+    const outputPath = this.exporter.getOutputPath(filename, currentSource, 'clip');
     const result = this.replayBuffer.saveReplay(outputPath, minutes);
 
     const clip = {
@@ -525,6 +597,7 @@ class NdiRecorderServer {
       return res.end(JSON.stringify({
         isRecording: this.isRecording,
         recordingDurationSeconds: this.isRecording ? Math.round((Date.now() - this.recordingStartTime) / 1000) : 0,
+        isStreamActive: this.ndiManager.isStreamActive,
         activeSource,
         sources: this.ndiManager.getSources(),
         availableEncoders: getAvailableEncoders(),

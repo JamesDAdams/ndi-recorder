@@ -111,13 +111,12 @@ test('6. Audio Source Routing & Video Quality Configuration', () => {
   assert.strictEqual(updated.audio.bitrateKbps, 320);
 });
 
-test('7. Plan Document (PLAN.md) Validation', () => {
-  assert.ok(fs.existsSync('PLAN.md'));
-  const content = fs.readFileSync('PLAN.md', 'utf8');
-  assert.ok(content.includes('NDI DockRecorder'));
-  assert.ok(content.includes('Replay Buffer'));
-  assert.ok(content.includes('Fireshare'));
-  assert.ok(content.includes('Stream Deck'));
+test('7. Project Manifest Validation', () => {
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  assert.ok(pkg.name.includes('ndi'));
+  assert.ok(pkg.description.includes('NDI'));
+  assert.ok(pkg.description.includes('Fireshare'));
+  assert.ok(pkg.description.includes('Stream Deck'));
 });
 
 test('8. Web Dashboard Root HTML Serving (http://localhost:3000)', async () => {
@@ -269,6 +268,93 @@ test('15. Profile form not clobbered by fetchStatus polling (dirty flag)', async
   assert.ok(html.includes("if (res.ok) profileFormDirty = false;"));
   assert.ok(html.includes("'prof-auto-record'"));
   assert.ok(html.includes("profileFormDirty = true;"));
+});
+
+test('16. NDI signal detection: no frames => hasSignal false & dashboard badge offline', async () => {
+  const app = new NdiRecorderServer();
+  const server = app.listen(0);
+  const port = server.address().port;
+
+  let lostSource = null;
+  app.ndiManager.on('ndiSignalLost', (s) => { lostSource = s; });
+
+  assert.strictEqual(app.previewStream.hasSignal, false);
+
+  // Simulate a pipeline that once received frames, then went silent > 5s
+  app.previewStream.hasSignal = true;
+  app.previewStream.lastFrameAt = Date.now() - 10000;
+
+  const deadline = Date.now() + 5000;
+  while (app.previewStream.hasSignal && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  assert.strictEqual(app.previewStream.hasSignal, false);
+  assert.strictEqual(lostSource, app.config.selectedSource);
+
+  const res = await fetch(`http://localhost:${port}/api/status`);
+  assert.strictEqual(res.status, 200);
+  const data = await res.json();
+  assert.strictEqual(data.isStreamActive, false);
+
+  const m = await import('../src/html.mjs');
+  const html = m.getDashboardHtml();
+  assert.ok(html.includes('id="badge-live-label"'));
+  assert.ok(html.includes('HORS LIGNE'));
+
+  app.close();
+  server.close();
+});
+
+test('17. Per-Profile Output Directories (recordDir / clipDir)', () => {
+  updateConfig({
+    sourceProfiles: {
+      'prof-a': {
+        id: 'prof-a',
+        name: 'Profile A',
+        source: 'STREAM_A',
+        autoRecord: true,
+        replayBufferMinutes: 10,
+        bitrateMbps: 20,
+        encoder: 'libx264',
+        recordDir: './tmp_recordings/full',
+        clipDir: './tmp_recordings/clips'
+      },
+      'prof-b': {
+        id: 'prof-b',
+        name: 'Profile B',
+        source: 'STREAM_B',
+        autoRecord: false,
+        replayBufferMinutes: 3,
+        bitrateMbps: 8,
+        encoder: 'libx264'
+      }
+    }
+  });
+
+  const exporter = new FireshareExporter(getConfig());
+  const filename = 'test_profile_dirs.mp4';
+
+  const fullPath = exporter.getOutputPath(filename, 'STREAM_A', 'full');
+  assert.ok(fullPath.includes('tmp_recordings/full'));
+  assert.ok(fullPath.includes(filename));
+
+  const clipPath = exporter.getOutputPath(filename, 'STREAM_A', 'clip');
+  assert.ok(clipPath.includes('tmp_recordings/clips'));
+  assert.ok(clipPath.includes(filename));
+
+  const fallbackPath = exporter.getOutputPath(filename, 'STREAM_B', 'full');
+  assert.ok(fallbackPath.includes(path.join(getConfig().recordingDir || './recordings', filename)));
+
+  const fallbackClipPath = exporter.getOutputPath(filename, 'STREAM_B', 'clip');
+  assert.ok(fallbackClipPath.includes(path.join(getConfig().recordingDir || './recordings', filename)));
+
+  const profB = getConfig().sourceProfiles['prof-b'];
+  assert.strictEqual(profB.recordDir, '');
+  assert.strictEqual(profB.clipDir, '');
+
+  fs.rmSync('./tmp_recordings/full', { recursive: true, force: true });
+  fs.rmSync('./tmp_recordings/clips', { recursive: true, force: true });
 });
 
 test.after(() => {
