@@ -153,7 +153,7 @@ export function getDashboardHtml() {
     </nav>
 
     <div id="sys-status" class="flex gap-6 text-sm text-slate-400">
-      <div>RAM Buffer: <span id="stat-ram" class="text-slate-200 font-mono">5 min</span></div>
+      <div>Temps maximum clips: <span id="stat-buffer-max" class="text-slate-200 font-mono">5 min</span></div>
       <div>Stockage: <span id="stat-disk" class="text-emerald-400 font-mono">Actif</span></div>
     </div>
   </header>
@@ -313,7 +313,7 @@ export function getDashboardHtml() {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">RAM Buffer Max (minutes)</label>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Temps maximym clips (minutes)</label>
             <input type="number" id="prof-ram-buffer" min="1" max="60" value="5" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
           </div>
 
@@ -628,7 +628,10 @@ ${API_DOCS_PAGE}
           fpsBadge.textContent = (data.config?.video?.fps || 60) + ' FPS';
         }
 
-        document.getElementById('stat-ram').textContent = data.buffer?.bufferDurationMinutes + ' min';
+        const ramBadge = document.getElementById('stat-buffer-max');
+        if (ramBadge) {
+          ramBadge.textContent = (activeProfile?.replayBufferMinutes ?? data.buffer?.bufferDurationMinutes ?? 5) + ' min';
+        }
 
         // Populate Source Dropdowns (Dashboard & Settings)
         const select = document.getElementById('source-select');
