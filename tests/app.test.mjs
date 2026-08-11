@@ -9,6 +9,11 @@ import { NdiManager } from '../src/ndi.mjs';
 import { ReplayBuffer } from '../src/replay-buffer.mjs';
 import { FireshareExporter } from '../src/fireshare.mjs';
 
+// Keep mock recordings/clips out of production dirs (./recordings, ./clips)
+const originalRecordingDir = getConfig().recordingDir;
+const originalClipsDir = getConfig().clipsDir;
+updateConfig({ recordingDir: './tmp_recordings', clipsDir: './tmp_recordings/clips' });
+
 test('1. Docker & Config Setup: verifies config structures and default settings', () => {
   const config = getConfig();
   assert.strictEqual(config.selectedSource, 'GAMINGPC (NVIDIA GeForce RTX 3070 1)');
@@ -486,6 +491,11 @@ test('20. Max record size auto-stops recording', async () => {
 });
 
 test.after(() => {
+  // Restore production dirs in case the suite runs without SETTINGS_DB (IDE/plain node --test)
+  updateConfig({ recordingDir: originalRecordingDir, clipsDir: originalClipsDir });
+  // Remove test artifacts left in tmp dirs
+  fs.rmSync('./tmp_recordings', { recursive: true, force: true });
+  fs.rmSync('./tmp_test_buffer', { recursive: true, force: true });
   // Ensure process exits cleanly after node test suite finishes
   setImmediate(() => {
     process.exit(0);

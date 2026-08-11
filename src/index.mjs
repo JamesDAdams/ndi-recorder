@@ -329,8 +329,7 @@ class NdiRecorderServer {
       console.log(`[NDI] Signal detected from ${sourceName}`);
       const profiles = Object.values(this.config.sourceProfiles || {});
       const activeProf = profiles.find(p => p.source === sourceName && p.autoRecord);
-      const autoRec = activeProf ? true : (profiles.length === 0 ? this.config.autoRecordOnNdi : false);
-      if (autoRec && !this.isRecording) {
+      if (activeProf && !this.isRecording) {
         this.startRecording('AUTO');
       }
     });
@@ -339,8 +338,7 @@ class NdiRecorderServer {
       console.log(`[NDI] Signal lost from ${sourceName}`);
       const profiles = Object.values(this.config.sourceProfiles || {});
       const activeProf = profiles.find(p => p.source === sourceName && p.autoRecord);
-      const autoRec = activeProf ? true : (profiles.length === 0 ? this.config.autoRecordOnNdi : false);
-      if (autoRec && this.isRecording) {
+      if (activeProf && this.isRecording) {
         this.stopRecording();
       }
     });
