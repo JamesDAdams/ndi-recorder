@@ -356,7 +356,7 @@ test('17. Per-Profile Output Directories (recordDir / clipDir)', () => {
   assert.ok(fallbackPath.includes(path.join(getConfig().recordingDir || './recordings', filename)));
 
   const fallbackClipPath = exporter.getOutputPath(filename, 'STREAM_B', 'clip');
-  assert.ok(fallbackClipPath.includes(path.join(getConfig().recordingDir || './recordings', filename)));
+  assert.ok(fallbackClipPath.includes(path.join(getConfig().clipsDir || './clips', filename)));
 
   const profB = getConfig().sourceProfiles['prof-b'];
   assert.strictEqual(profB.recordDir, '');
@@ -413,6 +413,75 @@ test('18. Preview enable/disable toggle (dashboard button + API)', async () => {
   app2.close();
 
   updateConfig({ previewEnabled: true });
+  app.close();
+});
+
+test('19. Max clip size caps exported clip size', () => {
+  const bufferDir = './tmp_recordings/buf';
+  fs.rmSync(bufferDir, { recursive: true, force: true });
+  const rb = new ReplayBuffer({ bufferDir, durationMinutes: 10 });
+
+  for (let i = 0; i < 3; i++) {
+    const filePath = path.join(bufferDir, `seg_${i}.ts`);
+    fs.writeFileSync(filePath, Buffer.alloc(200 * 1024));
+    rb.segments.push({ path: filePath, timestamp: Date.now() - (3 - i) * 1000 });
+  }
+
+  const outPath = './tmp_recordings/capped_clip.mp4';
+  const result = rb.saveReplay(outPath, 5, 0.3);
+  const sizeBytes = fs.statSync(outPath).size;
+  assert.ok(sizeBytes <= 0.3 * 1024 * 1024, `clip size ${sizeBytes} exceeds cap`);
+  assert.strictEqual(sizeBytes, 200 * 1024);
+  assert.strictEqual(result.segmentsCount, 1);
+  assert.strictEqual(result.duration, 1, 'capped clip duration reflects included segments only');
+
+  const resultTinyCap = rb.saveReplay('./tmp_recordings/tiny_cap_clip.mp4', 5, 0.1);
+  assert.strictEqual(resultTinyCap.segmentsCount, 1, 'first segment always included even if over cap');
+  assert.strictEqual(fs.statSync('./tmp_recordings/tiny_cap_clip.mp4').size, 200 * 1024);
+  assert.ok(resultTinyCap.success);
+
+  const resultUnlimited = rb.saveReplay('./tmp_recordings/full_clip.mp4', 5, 0);
+  assert.strictEqual(resultUnlimited.segmentsCount, 3);
+  assert.strictEqual(fs.statSync('./tmp_recordings/full_clip.mp4').size, 3 * 200 * 1024);
+  assert.strictEqual(resultUnlimited.duration, 2);
+
+  rb.stop();
+  fs.rmSync(bufferDir, { recursive: true, force: true });
+  fs.rmSync('./tmp_recordings/capped_clip.mp4', { force: true });
+  fs.rmSync('./tmp_recordings/tiny_cap_clip.mp4', { force: true });
+  fs.rmSync('./tmp_recordings/full_clip.mp4', { force: true });
+});
+
+test('20. Max record size auto-stops recording', async () => {
+  updateConfig({
+    sourceProfiles: {
+      'prof-max': {
+        id: 'prof-max',
+        name: 'Max Size Profile',
+        source: 'GAMINGPC (NVIDIA GeForce RTX 3070 1)',
+        autoRecord: false,
+        replayBufferMinutes: 5,
+        bitrateMbps: 100,
+        encoder: 'libx264',
+        maxRecordSizeMb: 1
+      }
+    }
+  });
+  const app = new NdiRecorderServer({ sizeCheckIntervalMs: 100 });
+  const started = app.startRecording('SIZETEST');
+  assert.ok(started.success, 'recording should start');
+  assert.strictEqual(app.isRecording, true);
+
+  const deadline = Date.now() + 3000;
+  while (app.isRecording && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+  assert.strictEqual(app.isRecording, false, 'recording should auto-stop at max size');
+
+  const recordings = getRecordings(10);
+  const last = recordings.find(r => r.type === 'full');
+  assert.ok(last, 'recording should be logged');
+
   app.close();
 });
 

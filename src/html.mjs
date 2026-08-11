@@ -154,7 +154,6 @@ export function getDashboardHtml() {
 
     <div id="sys-status" class="flex gap-6 text-sm text-slate-400">
       <div>Temps maximum clips: <span id="stat-buffer-max" class="text-slate-200 font-mono">5 min</span></div>
-      <div>Stockage: <span id="stat-disk" class="text-emerald-400 font-mono">Actif</span></div>
     </div>
   </header>
 
@@ -343,8 +342,21 @@ export function getDashboardHtml() {
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-400 mb-1">Dossier Clips (replay)</label>
-            <input type="text" id="prof-clip-dir" placeholder="./recordings" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-cyan-500">
+            <input type="text" id="prof-clip-dir" placeholder="./clips" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-cyan-500">
             <p class="text-[11px] text-slate-500 mt-1">Vide = dossier global par défaut.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Taille max Enregistrements (Mo)</label>
+            <input type="number" id="prof-max-record-size" min="0" value="0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+            <p class="text-[11px] text-slate-500 mt-1">0 = illimité. Arrêt automatique de l&#39;enregistrement à cette taille.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Taille max Clips (Mo)</label>
+            <input type="number" id="prof-max-clip-size" min="0" value="0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+            <p class="text-[11px] text-slate-500 mt-1">0 = illimité. Le clip exporté est plafonné à cette taille.</p>
           </div>
         </div>
 
@@ -476,6 +488,8 @@ ${API_DOCS_PAGE}
 
       document.getElementById('prof-record-dir').value = prof.recordDir || '';
       document.getElementById('prof-clip-dir').value = prof.clipDir || '';
+      document.getElementById('prof-max-record-size').value = prof.maxRecordSizeMb || 0;
+      document.getElementById('prof-max-clip-size').value = prof.maxClipSizeMb || 0;
 
       const profSourceSelect = document.getElementById('prof-source-select');
       if (profSourceSelect) profSourceSelect.value = prof.source || '';
@@ -514,7 +528,9 @@ ${API_DOCS_PAGE}
         bitrateMbps: 12,
         encoder: 'libx264',
         recordDir: '',
-        clipDir: ''
+        clipDir: '',
+        maxRecordSizeMb: 0,
+        maxClipSizeMb: 0
       };
 
       if (!currentConfig.sourceProfiles) currentConfig.sourceProfiles = {};
@@ -536,6 +552,8 @@ ${API_DOCS_PAGE}
       const encoder = document.getElementById('prof-encoder').value;
       const recordDir = document.getElementById('prof-record-dir').value.trim();
       const clipDir = document.getElementById('prof-clip-dir').value.trim();
+      const maxRecordSizeMb = Math.max(0, parseInt(document.getElementById('prof-max-record-size').value) || 0);
+      const maxClipSizeMb = Math.max(0, parseInt(document.getElementById('prof-max-clip-size').value) || 0);
 
       const sourceProfiles = {};
       sourceProfiles[activeProfileId] = {
@@ -547,7 +565,9 @@ ${API_DOCS_PAGE}
         bitrateMbps: bitrate,
         encoder,
         recordDir,
-        clipDir
+        clipDir,
+        maxRecordSizeMb,
+        maxClipSizeMb
       };
 
       const res = await fetch('/api/config', {

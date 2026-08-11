@@ -280,8 +280,9 @@ class PreviewStreamManager {
 }
 
 class NdiRecorderServer {
-  constructor() {
+  constructor(options = {}) {
     this.config = getConfig();
+    this.sizeCheckIntervalMs = options.sizeCheckIntervalMs || 5000;
     this.ndiManager = new NdiManager(this.config);
     this.replayBuffer = new ReplayBuffer({
       bufferDir: process.env.REPLAY_BUFFER_DIR || '/tmp/replay_buffer',
@@ -291,6 +292,7 @@ class NdiRecorderServer {
 
     this.isRecording = false;
     this.recordingStartTime = null;
+    this.recordingSizeWatcher = null;
     this.recordedClips = [];
 
     this.previewStream = new PreviewStreamManager(
@@ -362,13 +364,41 @@ class NdiRecorderServer {
     this.currentRecordingSource = currentSource;
     const filename = this.exporter.generateFilename(currentSource, prefix, 'full');
     this.currentRecordingPath = this.exporter.getOutputPath(filename, currentSource, 'full');
+    this.startRecordingSizeWatcher();
 
     console.log(`[REC] Started recording to ${this.currentRecordingPath}`);
     return { success: true, filename, filePath: this.currentRecordingPath };
   }
 
+  startRecordingSizeWatcher() {
+    if (this.recordingSizeWatcher) clearInterval(this.recordingSizeWatcher);
+    this.recordingSizeWatcher = null;
+    const profile = this.exporter.getProfileForSource(this.currentRecordingSource);
+    const maxSizeMb = (profile && profile.maxRecordSizeMb) || 0;
+    if (!maxSizeMb || maxSizeMb <= 0) return;
+    const bitrateMbps = (profile && profile.bitrateMbps) || (this.config.video && this.config.video.bitrateMbps) || 12;
+    const maxBytes = maxSizeMb * 1024 * 1024;
+    this.recordingSizeWatcher = setInterval(() => {
+      let sizeBytes = 0;
+      try { sizeBytes = fs.statSync(this.currentRecordingPath).size; } catch (e) {}
+      if (sizeBytes <= 0 && this.recordingStartTime) {
+        const elapsedS = (Date.now() - this.recordingStartTime) / 1000;
+        sizeBytes = Math.round((bitrateMbps * 1000000 / 8) * elapsedS);
+      }
+      if (sizeBytes >= maxBytes) {
+        console.log(`[REC] Taille max atteinte (${maxSizeMb} Mo) — arrêt automatique`);
+        this.stopRecording();
+      }
+    }, this.sizeCheckIntervalMs);
+    if (this.recordingSizeWatcher.unref) this.recordingSizeWatcher.unref();
+  }
+
   stopRecording() {
     if (!this.isRecording) return { error: 'Not recording' };
+    if (this.recordingSizeWatcher) {
+      clearInterval(this.recordingSizeWatcher);
+      this.recordingSizeWatcher = null;
+    }
     const duration = Math.round((Date.now() - this.recordingStartTime) / 1000);
     this.isRecording = false;
 
@@ -404,7 +434,9 @@ class NdiRecorderServer {
     const currentSource = this.ndiManager.activeSource || this.config.selectedSource || 'GAMINGPC (NVIDIA GeForce RTX 3070 1)';
     const filename = this.exporter.generateFilename(currentSource, prefix, 'clip');
     const outputPath = this.exporter.getOutputPath(filename, currentSource, 'clip');
-    const result = this.replayBuffer.saveReplay(outputPath, minutes);
+    const profile = this.exporter.getProfileForSource(currentSource);
+    const maxClipSizeMb = (profile && profile.maxClipSizeMb) || 0;
+    const result = this.replayBuffer.saveReplay(outputPath, minutes, maxClipSizeMb);
     const duration = (result && result.duration) ? result.duration : minutes * 60;
 
     const clip = {

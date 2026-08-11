@@ -54,7 +54,7 @@ export class ReplayBuffer {
     this.segments = [];
   }
 
-  saveReplay(outputFilePath, minutes = 5) {
+  saveReplay(outputFilePath, minutes = 5, maxSizeMb = 0) {
     if (this.segments.length === 0) {
       // Fallback: create mock video file if empty
       const targetDir = path.dirname(outputFilePath);
@@ -79,16 +79,33 @@ export class ReplayBuffer {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
-    // Concatenate selected segments into output MP4
-    const concatenatedContent = selectedSegments.map(s => {
-      try { return fs.readFileSync(s.path); } catch (e) { return Buffer.alloc(0); }
-    });
+    // Concatenate selected segments into output MP4 (capped by maxSizeMb)
+    const maxBytes = maxSizeMb > 0 ? maxSizeMb * 1024 * 1024 : 0;
+    const chunks = [];
+    let totalBytes = 0;
+    for (const s of selectedSegments) {
+      let buf;
+      try { buf = fs.readFileSync(s.path); } catch (e) { buf = Buffer.alloc(0); }
+      if (maxBytes > 0 && totalBytes > 0 && totalBytes + buf.length > maxBytes) break;
+      chunks.push(buf);
+      totalBytes += buf.length;
+    }
 
-    fs.writeFileSync(outputFilePath, Buffer.concat(concatenatedContent));
+    fs.writeFileSync(outputFilePath, Buffer.concat(chunks));
+
+    let resultDuration = duration;
+    if (chunks.length > 0 && chunks.length < selectedSegments.length) {
+      const included = selectedSegments.slice(0, chunks.length);
+      resultDuration = Math.min(
+        minutes * 60,
+        Math.max(1, Math.round((included[included.length - 1].timestamp - included[0].timestamp) / 1000))
+      );
+    }
+
     return {
       success: true,
-      duration,
-      segmentsCount: selectedSegments.length,
+      duration: resultDuration,
+      segmentsCount: chunks.length,
       file: outputFilePath
     };
   }

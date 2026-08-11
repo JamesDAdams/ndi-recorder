@@ -1,6 +1,7 @@
 node_modules/
 bin/
 recordings/
+clips/
 tmp_recordings/
 tmp_test_buffer/
 config/

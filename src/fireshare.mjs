@@ -22,9 +22,11 @@ export class FireshareExporter {
   getOutputPath(filename, sourceName, type = 'full') {
     let outputDir = this.config.recordingDir || './recordings';
     const profile = this.getProfileForSource(sourceName);
-    if (profile) {
-      const profileDir = type === 'clip' ? profile.clipDir : profile.recordDir;
-      if (profileDir && profileDir.trim()) outputDir = profileDir;
+    const profileDir = profile ? (type === 'clip' ? profile.clipDir : profile.recordDir) : '';
+    if (profileDir && profileDir.trim()) {
+      outputDir = profileDir;
+    } else if (type === 'clip') {
+      outputDir = this.config.clipsDir || outputDir;
     }
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });

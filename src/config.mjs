@@ -32,10 +32,13 @@ export const defaultConfig = {
       bitrateMbps: 12,
       encoder: 'libx264',
       recordDir: '',
-      clipDir: ''
+      clipDir: '',
+      maxRecordSizeMb: 0,
+      maxClipSizeMb: 0
     }
   },
   recordingDir: process.env.RECORDING_DIR || './recordings',
+  clipsDir: process.env.CLIPS_DIR || './clips',
   ndiAccessIps: process.env.NDI_ACCESS_IPS ? process.env.NDI_ACCESS_IPS.split(',') : ['192.168.1.148', '192.168.1.129', '192.168.1.100'],
   video: {
     resolution: '1080p',
@@ -76,7 +79,9 @@ function mergeConfig(base, newSettings) {
           bitrateMbps: 12,
           encoder: 'libx264',
           recordDir: '',
-          clipDir: ''
+          clipDir: '',
+          maxRecordSizeMb: 0,
+          maxClipSizeMb: 0
         };
         const merged = { ...existing, ...prof };
 
