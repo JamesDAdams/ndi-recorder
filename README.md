@@ -5,7 +5,7 @@ Headless Docker container that records NDI streams with a replay buffer, Stream 
 ## Features
 
 - **NDI recording** - captures any NDI source on the local network
-- **Replay buffer** - keeps a rolling window of 5/10/15 min in RAM (tmpfs), save a clip on demand
+- **Replay buffer** - keeps a rolling window in RAM (tmpfs), save a clip on demand
 - **Stream Deck** - REST shortcuts to toggle recording and save clips without opening the dashboard
 - **Hardware encoding** - uses Intel QSV (`h264_qsv`) when `/dev/dri` is available, falls back to `libx264` automatically
 - **Per-source profiles** - different output directories, bitrates and auto-record rules per NDI source
@@ -45,17 +45,18 @@ services:
     network_mode: host
     restart: unless-stopped
     devices:
-      - /dev/dri:/dev/dri          # Intel iGPU for hardware encoding - remove if not available
+      # Intel iGPU passthrough for hardware encoding (h264_qsv).
+      # Remove this line if your host has no Intel iGPU — libx264 fallback is automatic.
+      - /dev/dri:/dev/dri
     environment:
       - PORT=3000
-      - REPLAY_BUFFER_MINUTES=5    # 5, 10 or 15
-      - RECORDING_DIR=/media/fireshare/watch
-      - SETTINGS_DB=/app/data/settings.db
-      - NDI_ACCESS_IPS=192.168.1.10,192.168.1.20   # comma-separated, leave empty to allow all
+      - NDI_ACCESS_IPS=192.168.1.10,192.168.1.20
     tmpfs:
+      # Replay buffer stored in RAM. At 1080p60 (~12 Mbps h264), 1 GB = ~11 min of buffer.
+      # 2G = ~22 min, 4G = ~44 min. Adjust to your needs.
       - /tmp/replay_buffer:size=2G,mode=777
     volumes:
-      - ./recordings:/media/fireshare/watch
+      - ./recordings:/media
       - ./data:/app/data
       - ./config:/app/config
 ```
@@ -78,11 +79,8 @@ docker run -d \
   --device /dev/dri:/dev/dri \
   --tmpfs /tmp/replay_buffer:size=2147483648,mode=777 \
   -e PORT=3000 \
-  -e REPLAY_BUFFER_MINUTES=5 \
-  -e RECORDING_DIR=/media/fireshare/watch \
-  -e SETTINGS_DB=/app/data/settings.db \
   -e NDI_ACCESS_IPS=192.168.1.10,192.168.1.20 \
-  -v /path/to/recordings:/media/fireshare/watch \
+  -v /path/to/recordings:/media \
   -v /path/to/data:/app/data \
   -v /path/to/config:/app/config \
   ghcr.io/jamesdadams/ndi-recorder:latest
@@ -113,9 +111,9 @@ Then go to **Docker** -> **Add Container** - the template will appear in the dro
 | Network type | **Host** (mandatory for NDI) |
 | Extra parameters | `--device /dev/dri:/dev/dri --tmpfs /tmp/replay_buffer:size=2147483648,mode=777` |
 
-> **Intel iGPU on Unraid:** the `--device /dev/dri:/dev/dri` extra parameter passes through the Intel GPU for hardware encoding. Remove it if your server has no Intel iGPU (AMD, ARM, or no GPU).
+> **Intel iGPU on Unraid:** remove `--device /dev/dri:/dev/dri` from Extra parameters if your server has no Intel iGPU.
 
-> **Replay buffer RAM:** the `--tmpfs` parameter allocates 2 GB of RAM for the buffer. Adjust `size=` to fit your server's available memory and buffer duration.
+> **Replay buffer RAM:** at 1080p60 (~12 Mbps h264), 1 GB = ~11 min of buffer. 2 GB = ~22 min, 4 GB = ~44 min. Adjust `size=` in the Extra parameters accordingly.
 
 ---
 
@@ -124,9 +122,6 @@ Then go to **Docker** -> **Add Container** - the template will appear in the dro
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3000` | Port the web server listens on |
-| `REPLAY_BUFFER_MINUTES` | `5` | Rolling buffer duration (5, 10 or 15) |
-| `RECORDING_DIR` | `/media/fireshare/watch` | Default output directory for recordings |
-| `SETTINGS_DB` | `/app/data/settings.db` | Path to the SQLite database |
 | `NDI_ACCESS_IPS` | _(empty)_ | Comma-separated IPs allowed to send NDI - leave empty to allow all |
 
 ---
@@ -135,7 +130,7 @@ Then go to **Docker** -> **Add Container** - the template will appear in the dro
 
 | Container path | Purpose |
 |---|---|
-| `/media/fireshare/watch` | Recording output (full recordings and clips) |
+| `/media` | Recording output (full recordings and clips) |
 | `/app/data` | Persistent settings database (`settings.db`) |
 | `/app/config` | NDI Access Manager configuration |
 

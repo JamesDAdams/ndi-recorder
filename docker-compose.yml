@@ -1,33 +1,21 @@
 services:
   ndi-dockrecorder:
-    build: .
+    image: ghcr.io/jamesdadams/ndi-recorder:latest
     container_name: ndi-dockrecorder
-    ports:
-      - "3000:3000"
-    # Host networking (network_mode: host) is required for NDI mDNS/multicast on Linux hosts
+    network_mode: host
     restart: unless-stopped
     devices:
-      # Passthrough du GPU Intel intégré (iGPU) pour l'encodage matériel QuickSync/VAAPI (h264_qsv).
-      # ATTENTION : docker compose up ÉCHOUE si /dev/dri n'existe pas sur l'hôte (pas d'iGPU Intel,
-      # macOS, AMD/ARM...). Dans ce cas, commentez la ligne ci-dessous (le fallback libx264 reste actif).
+      # Intel iGPU passthrough for hardware encoding (h264_qsv).
+      # Remove this line if your host has no Intel iGPU — libx264 fallback is automatic.
       - /dev/dri:/dev/dri
     environment:
       - PORT=3000
-      - REPLAY_BUFFER_MINUTES=5
-      - RECORDING_DIR=/media/fireshare/watch
-      - SETTINGS_DB=/app/data/settings.db
       - NDI_ACCESS_IPS=192.168.1.129,192.168.1.100,192.168.1.200
     tmpfs:
+      # Replay buffer stored in RAM. At 1080p60 (~12 Mbps h264), 1 GB ≈ 11 min of buffer.
+      # Adjust size to match your desired buffer duration: 2G ≈ 22 min, 4G ≈ 44 min.
       - /tmp/replay_buffer:size=2G,mode=777
     volumes:
-      # Dossier de sortie par défaut (enregistrements + clips si les profils n'en définissent pas)
-      - ./recordings:/media/fireshare/watch
-      # Persistance des profils & paramètres (dossiers par profil compris) — mount de DOSSIER :
-      # ./data est créé automatiquement par Docker au premier démarrage, settings.db vit dedans
+      - ./recordings:/media
       - ./data:/app/data
       - ./config:/app/config
-      # Dossiers personnalisés par profil (facultatif) : montez-les ici, puis indiquez leur
-      # chemin dans le profil (ex. /media/fireshare/clips et /media/fireshare/records).
-      # Sinon, utilisez des sous-dossiers du volume déjà monté (ex. /media/fireshare/watch/clips).
-      # - ./clips:/media/fireshare/clips
-      # - ./records:/media/fireshare/records
