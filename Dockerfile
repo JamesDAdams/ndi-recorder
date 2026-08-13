@@ -49,6 +49,7 @@ WORKDIR /app
 # Copy application files & package.json
 COPY package.json ./
 COPY src/ ./src/
+COPY vendor/ ./vendor/
 
 # Compile NDI C helper executable
 RUN gcc -O2 src/ndi_capture.c -I/usr/local/include -L/usr/local/lib -lndi -o /usr/local/bin/ndi_capture
