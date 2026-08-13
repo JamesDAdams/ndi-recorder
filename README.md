@@ -4,19 +4,19 @@ Headless Docker container that records NDI streams with a replay buffer, Stream 
 
 ## Features
 
-- **NDI recording** — captures any NDI source on the local network
-- **Replay buffer** — keeps a rolling window of 5/10/15 min in RAM (tmpfs), save a clip on demand
-- **Stream Deck** — REST shortcuts to toggle recording and save clips without opening the dashboard
-- **Hardware encoding** — uses Intel QSV (`h264_qsv`) when `/dev/dri` is available, falls back to `libx264` automatically
-- **Per-source profiles** — different output directories, bitrates and auto-record rules per NDI source
-- **Fireshare output** — writes files directly into a Fireshare watch directory
-- **API key protection** — optional `X-Api-Key` header on all API endpoints
+- **NDI recording** - captures any NDI source on the local network
+- **Replay buffer** - keeps a rolling window of 5/10/15 min in RAM (tmpfs), save a clip on demand
+- **Stream Deck** - REST shortcuts to toggle recording and save clips without opening the dashboard
+- **Hardware encoding** - uses Intel QSV (`h264_qsv`) when `/dev/dri` is available, falls back to `libx264` automatically
+- **Per-source profiles** - different output directories, bitrates and auto-record rules per NDI source
+- **Fireshare output** - writes files directly into a Fireshare watch directory
+- **API key protection** - optional `X-Api-Key` header on all API endpoints
 
 ---
 
 ## Installation
 
-### Option 1 — Docker Compose (recommended)
+### Option 1 - Docker Compose (recommended)
 
 **Prerequisites:** Docker + Docker Compose installed on a Linux host.
 
@@ -45,7 +45,7 @@ services:
     network_mode: host
     restart: unless-stopped
     devices:
-      - /dev/dri:/dev/dri          # Intel iGPU for hardware encoding — remove if not available
+      - /dev/dri:/dev/dri          # Intel iGPU for hardware encoding - remove if not available
     environment:
       - PORT=3000
       - REPLAY_BUFFER_MINUTES=5    # 5, 10 or 15
@@ -68,7 +68,7 @@ docker compose pull && docker compose up -d
 
 ---
 
-### Option 2 — Docker run (single command)
+### Option 2 - Docker run (single command)
 
 ```bash
 docker run -d \
@@ -88,24 +88,20 @@ docker run -d \
   ghcr.io/jamesdadams/ndi-recorder:latest
 ```
 
-Remove `--device /dev/dri:/dev/dri` if your host has no Intel iGPU — the container will fall back to software encoding automatically.
+Remove `--device /dev/dri:/dev/dri` if your host has no Intel iGPU - the container will fall back to software encoding automatically.
 
 ---
 
-### Option 3 — Unraid Community Applications
+### Option 3 - Unraid
 
-#### Method A — Import the XML template manually
+Run this command in the Unraid terminal:
 
-1. In Unraid, go to **Docker** tab → **Add Container**
-2. Scroll down and click **"Add another Template"** or use the template editor
-3. Paste the URL of `ndi-dockrecorder.xml` from this repo, or upload the file directly
-4. Fill in the paths and click **Apply**
+```bash
+wget -O /boot/config/plugins/dockerMan/templates-user/ndi-dockrecorder.xml \
+  https://raw.githubusercontent.com/JamesDAdams/ndi-recorder/main/ndi-dockrecorder.xml
+```
 
-#### Method B — Import from XML file
-
-1. Copy `ndi-dockrecorder.xml` to `/boot/config/plugins/dockerMan/templates-user/` on your Unraid server
-2. In Unraid, go to **Docker** → **Add Container** → the template will appear in the dropdown
-3. Adjust the paths to match your share layout and click **Apply**
+Then go to **Docker** -> **Add Container** - the template will appear in the dropdown. Adjust the paths to match your share layout and click **Apply**.
 
 #### Unraid-specific notes
 
@@ -131,7 +127,7 @@ Remove `--device /dev/dri:/dev/dri` if your host has no Intel iGPU — the conta
 | `REPLAY_BUFFER_MINUTES` | `5` | Rolling buffer duration (5, 10 or 15) |
 | `RECORDING_DIR` | `/media/fireshare/watch` | Default output directory for recordings |
 | `SETTINGS_DB` | `/app/data/settings.db` | Path to the SQLite database |
-| `NDI_ACCESS_IPS` | _(empty)_ | Comma-separated IPs allowed to send NDI — leave empty to allow all |
+| `NDI_ACCESS_IPS` | _(empty)_ | Comma-separated IPs allowed to send NDI - leave empty to allow all |
 
 ---
 
