@@ -1,4 +1,4 @@
-# Dockerfile for NDI DockRecorder
+# Dockerfile for ndi-dockrecorder
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive

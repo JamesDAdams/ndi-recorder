@@ -6,6 +6,11 @@ services:
       - "3000:3000"
     # Host networking (network_mode: host) is required for NDI mDNS/multicast on Linux hosts
     restart: unless-stopped
+    devices:
+      # Passthrough du GPU Intel intégré (iGPU) pour l'encodage matériel QuickSync/VAAPI (h264_qsv).
+      # ATTENTION : docker compose up ÉCHOUE si /dev/dri n'existe pas sur l'hôte (pas d'iGPU Intel,
+      # macOS, AMD/ARM...). Dans ce cas, commentez la ligne ci-dessous (le fallback libx264 reste actif).
+      - /dev/dri:/dev/dri
     environment:
       - PORT=3000
       - REPLAY_BUFFER_MINUTES=5
