@@ -26,6 +26,7 @@ export function getAvailableEncoders() {
 export const defaultConfig = {
   selectedSource: 'GAMINGPC (NVIDIA GeForce RTX 3070 1)',
   previewEnabled: true,
+  replayBufferEnabled: true,
   replayBufferMinutes: 5,
   apiKey: process.env.API_KEY || '',
   sourceProfiles: {

@@ -6,6 +6,7 @@ import { getConfig, updateConfig, regenerateApiKey, getAvailableEncoders } from 
 import { logApiCall, insertRecording, insertReplaySave } from './db.mjs';
 import { NdiManager, resolveNdiCaptureBin } from './ndi.mjs';
 import { ReplayBuffer } from './replay-buffer.mjs';
+import { spawnEncoder, resolveScale } from './encoder.mjs';
 import { FireshareExporter } from './fireshare.mjs';
 import { getDashboardHtml } from './html.mjs';
 
@@ -293,7 +294,10 @@ class NdiRecorderServer {
     this.isRecording = false;
     this.recordingStartTime = null;
     this.recordingSizeWatcher = null;
+    this.recordingEncoder = null;
     this.recordedClips = [];
+    this.recordingFallback = false;
+    this.bufferFallback = false;
 
     this.previewStream = new PreviewStreamManager(
       () => resolveNdiCaptureBin(),
@@ -315,13 +319,42 @@ class NdiRecorderServer {
     });
 
     this.setupAutoRecord();
-    this.replayBuffer.start(this.config.selectedSource || 'GAMINGPC (NVIDIA GeForce RTX 3070 1)');
+    const initialSource = this.config.selectedSource || 'GAMINGPC (NVIDIA GeForce RTX 3070 1)';
+    if (this.config.replayBufferEnabled !== false) {
+      this.startReplayBuffer(initialSource);
+    }
 
     // Pre-start stream for active source
-    const initialSource = this.ndiManager.activeSource || this.config.selectedSource;
-    if (initialSource) {
-      this.previewStream.start(initialSource);
+    const previewSource = this.ndiManager.activeSource || this.config.selectedSource;
+    if (previewSource) {
+      this.previewStream.start(previewSource);
     }
+  }
+
+  startReplayBuffer(sourceName) {
+    const source = sourceName || this.ndiManager.activeSource || this.config.selectedSource || 'GAMINGPC (NVIDIA GeForce RTX 3070 1)';
+    if (this.replayBuffer.isActive) return;
+    this.bufferFallback = false;
+    const profile = this.exporter.getProfileForSource(source);
+    const configuredEncoder = (this.config.video && this.config.video.encoder) || 'libx264';
+    const available = getAvailableEncoders();
+    this.replayBuffer.start(source, {
+      encoder: available.includes(configuredEncoder) ? configuredEncoder : 'libx264',
+      bitrateMbps: (profile && profile.bitrateMbps) || (this.config.video && this.config.video.bitrateMbps) || 0,
+      recordQuality: (profile && profile.recordQuality) || 'source',
+      onFallback: () => { this.bufferFallback = true; }
+    });
+  }
+
+  setReplayBufferEnabled(enabled) {
+    if (enabled) {
+      this.startReplayBuffer();
+      console.log('[Clip] Système de clips activé');
+    } else {
+      this.replayBuffer.stop();
+      console.log('[Clip] Système de clips désactivé');
+    }
+    return this.config;
   }
 
   setupAutoRecord() {
@@ -362,6 +395,32 @@ class NdiRecorderServer {
     this.currentRecordingSource = currentSource;
     const filename = this.exporter.generateFilename(currentSource, prefix, 'full');
     this.currentRecordingPath = this.exporter.getOutputPath(filename, currentSource, 'full');
+
+    const profile = this.exporter.getProfileForSource(currentSource);
+    const bitrateMbps = (profile && profile.bitrateMbps) || (this.config.video && this.config.video.bitrateMbps) || 12;
+    const configuredEncoder = (this.config.video && this.config.video.encoder) || 'libx264';
+    const available = getAvailableEncoders();
+    const encoder = available.includes(configuredEncoder) ? configuredEncoder : 'libx264';
+    const preset = encoder.includes('nvenc') ? 'p4' : 'veryfast';
+
+    const recordQuality = (profile && profile.recordQuality) || 'source';
+    const scaleFilter = resolveScale(recordQuality);
+
+    this.recordingFallback = false;
+    this.recordingEncoder = spawnEncoder({
+      sourceName: currentSource,
+      onFallback: () => { this.recordingFallback = true; },
+      ffmpegArgs: [
+        ...(scaleFilter ? ['-vf', `scale=${scaleFilter}`] : []),
+        '-c:v', encoder,
+        '-preset', preset,
+        '-b:v', `${bitrateMbps}M`,
+        '-movflags', '+faststart',
+        '-f', 'mp4',
+        this.currentRecordingPath
+      ]
+    });
+
     this.startRecordingSizeWatcher();
 
     console.log(`[REC] Started recording to ${this.currentRecordingPath}`);
@@ -391,7 +450,7 @@ class NdiRecorderServer {
     if (this.recordingSizeWatcher.unref) this.recordingSizeWatcher.unref();
   }
 
-  stopRecording() {
+  async stopRecording() {
     if (!this.isRecording) return { error: 'Not recording' };
     if (this.recordingSizeWatcher) {
       clearInterval(this.recordingSizeWatcher);
@@ -400,7 +459,33 @@ class NdiRecorderServer {
     const duration = Math.round((Date.now() - this.recordingStartTime) / 1000);
     this.isRecording = false;
 
-    fs.writeFileSync(this.currentRecordingPath, 'FULL_RECORDING_MP4_DATA');
+    // Finalize encoder: EOF on ffmpeg stdin (capture killed) triggers clean trailer + faststart
+    if (this.recordingEncoder) {
+      const enc = this.recordingEncoder;
+      this.recordingEncoder = null;
+      const ffmpegDone = enc.ffmpeg ? new Promise(resolve => enc.ffmpeg.on('close', resolve)) : Promise.resolve();
+      if (enc.capture) { try { enc.capture.kill('SIGTERM'); } catch (e) {} }
+      await Promise.race([ffmpegDone, new Promise(r => setTimeout(r, 1500))]);
+      if (enc.ffmpeg && enc.ffmpeg.exitCode === null) {
+        try { enc.ffmpeg.kill('SIGTERM'); } catch (e) {}
+        await Promise.race([ffmpegDone, new Promise(r => setTimeout(r, 2000))]);
+        if (enc.ffmpeg && enc.ffmpeg.exitCode === null) {
+          try { enc.ffmpeg.kill('SIGKILL'); } catch (e) {}
+        }
+      }
+      enc.stop();
+    }
+
+    let sizeBytes = 0;
+    try { sizeBytes = fs.statSync(this.currentRecordingPath).size; } catch (e) {}
+
+    if (sizeBytes <= 0) {
+      console.warn(`[REC] No output produced for ${path.basename(this.currentRecordingPath)} — encoder may not have received frames`);
+      if (fs.existsSync(this.currentRecordingPath)) {
+        try { fs.unlinkSync(this.currentRecordingPath); } catch (e) {}
+      }
+      return { success: false, error: 'No output produced — encoder may not have received frames' };
+    }
 
     const clip = {
       filename: path.basename(this.currentRecordingPath),
@@ -410,8 +495,6 @@ class NdiRecorderServer {
     };
     this.recordedClips.unshift(clip);
 
-    let sizeBytes = 0;
-    try { sizeBytes = fs.statSync(this.currentRecordingPath).size; } catch (e) {}
     insertRecording({
       timestamp: clip.timestamp,
       filename: clip.filename,
@@ -428,13 +511,21 @@ class NdiRecorderServer {
     return { success: true, clip };
   }
 
-  saveReplay(minutes = 5, prefix = 'REPLAY') {
+  async saveReplay(minutes = 5, prefix = 'REPLAY') {
+    if (!this.replayBuffer.isActive) {
+      return { success: false, error: 'Le système de clips est désactivé — activez-le depuis le dashboard' };
+    }
     const currentSource = this.ndiManager.activeSource || this.config.selectedSource || 'GAMINGPC (NVIDIA GeForce RTX 3070 1)';
     const filename = this.exporter.generateFilename(currentSource, prefix, 'clip');
     const outputPath = this.exporter.getOutputPath(filename, currentSource, 'clip');
     const profile = this.exporter.getProfileForSource(currentSource);
     const maxClipSizeMb = (profile && profile.maxClipSizeMb) || 0;
-    const result = this.replayBuffer.saveReplay(outputPath, minutes, maxClipSizeMb);
+    const result = await this.replayBuffer.saveReplay(outputPath, minutes, maxClipSizeMb);
+    if (!result || !result.success) {
+      console.warn(`[REC] Clip save failed for ${filename} — no replay segments available`);
+      return { success: false, filename, minutes, duration: 0, error: 'No replay segments available to save' };
+    }
+
     const duration = (result && result.duration) ? result.duration : minutes * 60;
 
     const clip = {
@@ -445,19 +536,17 @@ class NdiRecorderServer {
     };
     this.recordedClips.unshift(clip);
 
-    if (result && result.success) {
-      let sizeBytes = 0;
-      try { sizeBytes = fs.statSync(outputPath).size; } catch (e) {}
-      insertReplaySave({
-        timestamp: clip.timestamp,
-        filename,
-        filePath: outputPath,
-        minutes,
-        duration,
-        source: currentSource,
-        sizeBytes
-      });
-    }
+    let sizeBytes = 0;
+    try { sizeBytes = fs.statSync(outputPath).size; } catch (e) {}
+    insertReplaySave({
+      timestamp: clip.timestamp,
+      filename,
+      filePath: outputPath,
+      minutes,
+      duration,
+      source: currentSource,
+      sizeBytes
+    });
 
     this.exporter.notifyFireshare(filename);
 
@@ -548,7 +637,7 @@ class NdiRecorderServer {
     });
   }
 
-  handleApiRequest(req, res) {
+  async handleApiRequest(req, res) {
     let parsed;
     try {
       parsed = new URL(req.url, 'http://localhost');
@@ -666,6 +755,9 @@ class NdiRecorderServer {
         sources: this.ndiManager.getSources(),
         availableEncoders: getAvailableEncoders(),
         buffer: this.replayBuffer.getStatus(),
+        replayBufferEnabled: this.config.replayBufferEnabled !== false,
+        bufferFallback: this.bufferFallback,
+        recordingFallback: this.recordingFallback,
         config: this.config,
         recentClips: this.recordedClips.slice(0, 5)
       }));
@@ -690,7 +782,7 @@ class NdiRecorderServer {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'Unauthorized: Invalid or missing API Key' }));
       }
-      const result = this.stopRecording();
+      const result = await this.stopRecording();
       if (result.error) res.writeHead(400);
       return res.end(JSON.stringify(result));
     }
@@ -701,7 +793,7 @@ class NdiRecorderServer {
         return res.end(JSON.stringify({ error: 'Unauthorized: Invalid or missing API Key' }));
       }
       const mins = parseInt(parsed.query.minutes || req.headers['x-replay-minutes'] || 5);
-      const result = this.saveReplay(mins);
+      const result = await this.saveReplay(mins);
       return res.end(JSON.stringify(result));
     }
 
@@ -720,6 +812,9 @@ class NdiRecorderServer {
           if (typeof newSettings.previewEnabled === 'boolean') {
             this.previewStream.setEnabled(newSettings.previewEnabled);
           }
+          if (typeof newSettings.replayBufferEnabled === 'boolean') {
+            this.setReplayBufferEnabled(newSettings.replayBufferEnabled);
+          }
           if (newSettings.selectedSource) {
             this.ndiManager.setSource(newSettings.selectedSource);
           }
@@ -734,12 +829,12 @@ class NdiRecorderServer {
 
     // Stream Deck specific shortcut endpoints
     if (pathname === '/api/streamdeck/toggle-rec' && req.method === 'POST') {
-      const result = this.isRecording ? this.stopRecording() : this.startRecording('STREAMDECK');
+      const result = this.isRecording ? await this.stopRecording() : this.startRecording('STREAMDECK');
       return res.end(JSON.stringify(result));
     }
 
     if (pathname === '/api/streamdeck/clip-5min' && req.method === 'POST') {
-      const result = this.saveReplay(5, 'STREAMDECK');
+      const result = await this.saveReplay(5, 'STREAMDECK');
       return res.end(JSON.stringify(result));
     }
 
@@ -749,7 +844,7 @@ class NdiRecorderServer {
         res.writeHead(400);
         return res.end(JSON.stringify({ error: 'Invalid minutes: must be 5, 10 or 15' }));
       }
-      const result = this.saveReplay(mins, 'STREAMDECK');
+      const result = await this.saveReplay(mins, 'STREAMDECK');
       return res.end(JSON.stringify(result));
     }
 
@@ -760,13 +855,17 @@ class NdiRecorderServer {
   listen(port = PORT) {
     this.server = http.createServer((req, res) => this.handleApiRequest(req, res));
     this.server.listen(port, () => {
-      console.log(`[NDI DockRecorder] Server running on http://localhost:${port}`);
+      console.log(`[NDI Recorder] Server running on http://localhost:${port}`);
     });
     return this.server;
   }
 
   close() {
     this.previewStream.stop();
+    if (this.recordingEncoder) {
+      try { this.recordingEncoder.stop(); } catch (e) {}
+      this.recordingEncoder = null;
+    }
     this.replayBuffer.stop();
     if (this.server) this.server.close();
   }

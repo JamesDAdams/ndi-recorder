@@ -219,14 +219,21 @@ export function getDashboardHtml() {
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg p-4 flex flex-col justify-between">
           <div>
-            <h3 class="font-semibold text-sm text-slate-300 mb-1">Clip</h3>
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-semibold text-sm text-slate-300">Clip</h3>
+              <button type="button" id="btn-toggle-buffer" onclick="toggleReplayBuffer()" class="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Clips : <span id="btn-toggle-buffer-label">ON</span>
+              </button>
+            </div>
             <p class="text-xs text-slate-400">Sauvegarder instantanément les X dernières minutes.</p>
           </div>
           <div class="mt-4 grid grid-cols-3 gap-2">
-            <button onclick="saveReplayClip(5)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">5m</button>
-            <button onclick="saveReplayClip(10)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">10m</button>
-            <button onclick="saveReplayClip(15)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">15m</button>
+            <button id="btn-clip-5" onclick="saveReplayClip(5)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">5m</button>
+            <button id="btn-clip-10" onclick="saveReplayClip(10)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">10m</button>
+            <button id="btn-clip-15" onclick="saveReplayClip(15)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">15m</button>
           </div>
+          <p id="clip-fallback-warning" class="hidden mt-3 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">⚠ Buffer en mode test pattern — aucun signal NDI re\u00e7u, les clips ne contiennent pas votre flux</p>
         </div>
 
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg p-4 flex flex-col justify-between">
@@ -238,6 +245,7 @@ export function getDashboardHtml() {
             <div id="rec-dot" class="w-3 h-3 rounded-full bg-white"></div>
             <span id="rec-btn-label">Démarrer Enregistrement</span>
           </button>
+          <p id="rec-fallback-warning" class="hidden mt-3 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">⚠ Enregistrement en mode test pattern — aucun signal NDI re\u00e7u</p>
         </div>
       </div>
     </div>
@@ -687,10 +695,48 @@ ${API_DOCS_PAGE}
           fpsBadge.textContent = (data.config?.video?.fps || 60) + ' FPS';
         }
 
+        const bufferActive = !!data.buffer?.isActive;
         const ramBadge = document.getElementById('stat-buffer-max');
         if (ramBadge) {
-          ramBadge.textContent = (activeProfile?.replayBufferMinutes ?? data.buffer?.bufferDurationMinutes ?? 5) + ' min';
+          ramBadge.textContent = bufferActive
+            ? (activeProfile?.replayBufferMinutes ?? data.buffer?.bufferDurationMinutes ?? 5) + ' min'
+            : 'OFF';
+          ramBadge.classList.toggle('text-slate-200', bufferActive);
+          ramBadge.classList.toggle('text-red-400', !bufferActive);
         }
+
+        // Replay buffer (clips) toggle UI
+        const bufferBtn = document.getElementById('btn-toggle-buffer');
+        const bufferBtnLabel = document.getElementById('btn-toggle-buffer-label');
+        if (bufferBtn && bufferBtnLabel) {
+          bufferBtn.classList.toggle('bg-emerald-500/15', bufferActive);
+          bufferBtn.classList.toggle('text-emerald-300', bufferActive);
+          bufferBtn.classList.toggle('border-emerald-500/30', bufferActive);
+          bufferBtn.classList.toggle('hover:bg-emerald-500/25', bufferActive);
+          bufferBtn.classList.toggle('bg-slate-700/30', !bufferActive);
+          bufferBtn.classList.toggle('text-slate-400', !bufferActive);
+          bufferBtn.classList.toggle('border-slate-600/40', !bufferActive);
+          bufferBtn.classList.toggle('hover:bg-slate-700/50', !bufferActive);
+          bufferBtnLabel.textContent = bufferActive ? 'ON' : 'OFF';
+          const dot = bufferBtn.querySelector('span');
+          if (dot) {
+            dot.classList.toggle('bg-emerald-400', bufferActive);
+            dot.classList.toggle('animate-pulse', bufferActive);
+            dot.classList.toggle('bg-slate-500', !bufferActive);
+          }
+        }
+        for (const id of ['btn-clip-5', 'btn-clip-10', 'btn-clip-15']) {
+          const btn = document.getElementById(id);
+          if (btn) {
+            btn.disabled = !bufferActive;
+            btn.classList.toggle('opacity-40', !bufferActive);
+            btn.classList.toggle('cursor-not-allowed', !bufferActive);
+          }
+        }
+        const clipWarn = document.getElementById('clip-fallback-warning');
+        if (clipWarn) clipWarn.classList.toggle('hidden', !data.bufferFallback);
+        const recWarn = document.getElementById('rec-fallback-warning');
+        if (recWarn) recWarn.classList.toggle('hidden', !data.recordingFallback);
 
         // Populate Source Dropdowns (Dashboard & Settings)
         const select = document.getElementById('source-select');
@@ -812,6 +858,20 @@ ${API_DOCS_PAGE}
       fetchStatus();
     }
 
+    async function toggleReplayBuffer() {
+      const enabled = currentConfig.replayBufferEnabled === false;
+      if (!enabled) {
+        const ok = confirm('Désactiver le système de clips ? Toutes les minutes déjà enregistrées en mémoire seront perdues.');
+        if (!ok) return;
+      }
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replayBufferEnabled: enabled })
+      });
+      fetchStatus();
+    }
+
     function updatePreviewUi() {
       const enabled = currentConfig.previewEnabled !== false;
       const btn = document.getElementById('btn-toggle-preview');
@@ -842,14 +902,16 @@ ${API_DOCS_PAGE}
     }
 
     async function saveReplayClip(minutes) {
+      if (currentConfig.replayBufferEnabled === false) {
+        alert('Le système de clips est désactivé — activez-le avec le bouton "Clips" avant de sauvegarder un clip.');
+        return;
+      }
       const res = await fetch('/api/streamdeck/clip?minutes=' + (minutes || 5), { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.duration && data.duration < minutes * 60) {
-          alert('Seulement ' + Math.round(data.duration / 60) + ' min de replay disponibles (demande : ' + minutes + ' min)');
-        }
-      } else {
-        alert('Erreur lors de la sauvegarde du replay');
+      const data = await res.json();
+      if (data.success === false) {
+        alert('Erreur lors de la sauvegarde du clip : ' + (data.error || 'échec inconnu'));
+      } else if (data.duration && data.duration < minutes * 60) {
+        alert('Seulement ' + Math.round(data.duration / 60) + ' min de replay disponibles (demande : ' + minutes + ' min)');
       }
       fetchStatus();
     }
@@ -929,7 +991,7 @@ ${API_DOCS_PAGE}
         keyInput.addEventListener('input', () => keyInput.setAttribute('data-user-editing', 'true'));
       }
 
-      ['prof-name', 'prof-source-select', 'prof-auto-record', 'prof-ram-buffer', 'prof-bitrate', 'prof-encoder', 'prof-quality'].forEach(id => {
+      ['prof-name', 'prof-source-select', 'prof-auto-record', 'prof-ram-buffer', 'prof-bitrate', 'prof-encoder', 'prof-quality', 'prof-record-dir', 'prof-clip-dir', 'prof-max-record-size', 'prof-max-clip-size'].forEach(id => {
         const field = document.getElementById(id);
         if (field) {
           field.addEventListener('input', () => { profileFormDirty = true; });

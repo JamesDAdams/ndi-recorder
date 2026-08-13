@@ -13,6 +13,7 @@ import { FireshareExporter } from '../src/fireshare.mjs';
 const originalRecordingDir = getConfig().recordingDir;
 const originalClipsDir = getConfig().clipsDir;
 updateConfig({ recordingDir: './tmp_recordings', clipsDir: './tmp_recordings/clips' });
+process.env.REPLAY_BUFFER_DIR = './tmp_recordings/replay_buffer';
 
 test('1. Docker & Config Setup: verifies config structures and default settings', () => {
   const config = getConfig();
@@ -38,24 +39,39 @@ test('2. NDI Stream Discovery & Auto-Record Trigger', () => {
 
 test('3. Replay Buffer Implementation (RAM / tmpfs saving)', async () => {
   const tmpDir = path.join(process.cwd(), 'tmp_test_buffer');
-  const buffer = new ReplayBuffer({ bufferDir: tmpDir, durationMinutes: 5 });
+  const buffer = new ReplayBuffer({ bufferDir: tmpDir, durationMinutes: 5, forceLavfi: true });
   
   buffer.start('GAMINGPC_REAL_STREAM');
-  await new Promise(r => setTimeout(r, 2500)); // allow interval to create 1 segment
+  await new Promise(r => setTimeout(r, 3500)); // allow a segment to complete
   
   const status = buffer.getStatus();
   assert.strictEqual(status.isActive, true);
   assert.ok(status.currentSegmentCount > 0);
 
   const outputPath = path.join(process.cwd(), 'tmp_recordings', 'replay_test.mp4');
-  const saveResult = buffer.saveReplay(outputPath, 5);
+  const saveResult = await buffer.saveReplay(outputPath, 5);
   assert.strictEqual(saveResult.success, true);
   assert.ok(fs.existsSync(outputPath));
+  assert.ok(fs.statSync(outputPath).size > 0);
+  const head = fs.readFileSync(outputPath).subarray(4, 8).toString('ascii');
+  assert.strictEqual(head, 'ftyp', 'output must be a valid MP4 (ftyp atom)');
+  assert.ok(fs.readFileSync(outputPath).includes(Buffer.from('moov')), 'output must contain a moov atom');
+  assert.ok(!fs.existsSync(outputPath + '.part'), 'no .part temp file must remain after a successful save');
 
   buffer.stop();
 
+  // A failed concat (missing segment) must not leave any final or temp file
+  const emptyBuffer = new ReplayBuffer({ bufferDir: path.join(tmpDir, 'empty'), durationMinutes: 5, forceLavfi: true });
+  emptyBuffer.segments.push({ path: path.join(tmpDir, 'does_not_exist_00000.ts'), timestamp: Date.now() });
+  const failPath = path.join(process.cwd(), 'tmp_recordings', 'replay_fail.mp4');
+  const failResult = await emptyBuffer.saveReplay(failPath, 5);
+  assert.strictEqual(failResult.success, false, 'saveReplay must report failure when no segment is usable');
+  assert.ok(!fs.existsSync(failPath), 'no final file must be left on failure');
+  assert.ok(!fs.existsSync(failPath + '.part'), 'no temp file must be left on failure');
+
   // Cleanup
   if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+  if (fs.existsSync(failPath)) fs.unlinkSync(failPath);
   if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
   if (fs.existsSync(path.join(process.cwd(), 'tmp_recordings'))) fs.rmSync(path.join(process.cwd(), 'tmp_recordings'), { recursive: true, force: true });
 });
@@ -78,9 +94,22 @@ test('4. Stream Deck Remote Integration (REST API endpoints)', async () => {
   const startData = await resStart.json();
   assert.strictEqual(startData.success, true);
 
+  // No NDI stream in the test env: wait for the lavfi fallback so the encoder
+  // actually produces output before stopping
+  await new Promise(r => setTimeout(r, 3600));
+
   const resStop = await fetch(`http://localhost:${port}/api/streamdeck/toggle-rec`, { method: 'POST' });
   const stopData = await resStop.json();
   assert.strictEqual(stopData.success, true);
+  assert.strictEqual(app.isRecording, false, 'recording must be stopped after toggle');
+
+  // Wait until the replay buffer holds at least one complete segment
+  const segDeadline = Date.now() + 10000;
+  while (Date.now() < segDeadline) {
+    const st = await (await fetch(`http://localhost:${port}/api/status`)).json();
+    if (st.buffer && st.buffer.currentSegmentCount > 0) break;
+    await new Promise(r => setTimeout(r, 250));
+  }
 
   // Test Stream Deck Save 5 min clip
   const resClip = await fetch(`http://localhost:${port}/api/streamdeck/clip-5min`, { method: 'POST' });
@@ -95,6 +124,49 @@ test('4. Stream Deck Remote Integration (REST API endpoints)', async () => {
   // Invalid minutes rejected with 400
   const resClipBad = await fetch(`http://localhost:${port}/api/streamdeck/clip?minutes=99`, { method: 'POST' });
   assert.strictEqual(resClipBad.status, 400);
+
+  app.close();
+});
+
+test('4b. Replay Buffer Toggle (dashboard "Clips" button)', async () => {
+  const app = new NdiRecorderServer();
+  const server = app.listen(0);
+  const port = server.address().port;
+
+  // Enabled by default
+  let st = await (await fetch(`http://localhost:${port}/api/status`)).json();
+  assert.strictEqual(st.replayBufferEnabled, true);
+  assert.strictEqual(st.buffer.isActive, true);
+
+  // Disable via the config endpoint (same call as the dashboard button)
+  const resOff = await fetch(`http://localhost:${port}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replayBufferEnabled: false })
+  });
+  assert.strictEqual(resOff.status, 200);
+
+  st = await (await fetch(`http://localhost:${port}/api/status`)).json();
+  assert.strictEqual(st.replayBufferEnabled, false);
+  assert.strictEqual(st.buffer.isActive, false);
+
+  // Saving a clip while disabled must fail with an explicit error
+  const resClip = await fetch(`http://localhost:${port}/api/streamdeck/clip?minutes=5`, { method: 'POST' });
+  const clipData = await resClip.json();
+  assert.strictEqual(clipData.success, false);
+  assert.ok(clipData.error && clipData.error.length > 0, 'must return an explicit error message');
+
+  // Re-enable
+  const resOn = await fetch(`http://localhost:${port}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replayBufferEnabled: true })
+  });
+  assert.strictEqual(resOn.status, 200);
+
+  st = await (await fetch(`http://localhost:${port}/api/status`)).json();
+  assert.strictEqual(st.replayBufferEnabled, true);
+  assert.strictEqual(st.buffer.isActive, true);
 
   app.close();
 });
@@ -143,7 +215,7 @@ test('8. Web Dashboard Root HTML Serving (http://localhost:3000)', async () => {
   assert.ok(res.headers.get('content-type').includes('text/html'));
   
   const htmlText = await res.text();
-  assert.ok(htmlText.includes('NDI DockRecorder'));
+  assert.ok(htmlText.includes('NDI Recorder'));
   assert.ok(htmlText.includes('Replay Buffer'));
 
   app.close();
@@ -257,7 +329,17 @@ test('14. SQLite logs: api_logs, recordings & replay_saves', async () => {
   app.ndiManager.setSource('GAMINGPC_REAL_STREAM');
 
   await fetch(`http://localhost:${port}/api/streamdeck/toggle-rec`, { method: 'POST' });
+  await new Promise(r => setTimeout(r, 3600)); // let the lavfi fallback produce real output
   await fetch(`http://localhost:${port}/api/streamdeck/toggle-rec`, { method: 'POST' });
+
+  // Wait until the replay buffer holds at least one complete segment
+  const segDeadline = Date.now() + 10000;
+  while (Date.now() < segDeadline) {
+    const st = await (await fetch(`http://localhost:${port}/api/status`)).json();
+    if (st.buffer && st.buffer.currentSegmentCount > 0) break;
+    await new Promise(r => setTimeout(r, 250));
+  }
+
   await fetch(`http://localhost:${port}/api/streamdeck/clip-5min`, { method: 'POST' });
 
   const logs = getApiLogs();
@@ -267,8 +349,7 @@ test('14. SQLite logs: api_logs, recordings & replay_saves', async () => {
 
   const recs = getRecordings();
   const rec = recs.find(r => r.source === 'GAMINGPC_REAL_STREAM' && r.type === 'full');
-  assert.ok(rec);
-  assert.strictEqual(rec.size_bytes, 'FULL_RECORDING_MP4_DATA'.length);
+  assert.ok(rec, 'recording row must be logged in DB');
 
   const replays = getReplaySaves();
   const replay = replays.find(r => r.minutes === 5 && r.source === 'GAMINGPC_REAL_STREAM');
@@ -424,34 +505,61 @@ test('18. Preview enable/disable toggle (dashboard button + API)', async () => {
   app.close();
 });
 
-test('19. Max clip size caps exported clip size', () => {
+test('19. Max clip size caps exported clip size', async () => {
   const bufferDir = './tmp_recordings/buf';
   fs.rmSync(bufferDir, { recursive: true, force: true });
-  const rb = new ReplayBuffer({ bufferDir, durationMinutes: 10 });
+  fs.mkdirSync(bufferDir, { recursive: true });
 
+  // Build 3 real 1-second mpegts segments synchronously via ffmpeg
+  const { spawnSync } = await import('child_process');
   for (let i = 0; i < 3; i++) {
-    const filePath = path.join(bufferDir, `seg_${i}.ts`);
-    fs.writeFileSync(filePath, Buffer.alloc(200 * 1024));
-    rb.segments.push({ path: filePath, timestamp: Date.now() - (3 - i) * 1000 });
+    spawnSync('ffmpeg', [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+      '-c:a', 'aac', '-t', '1',
+      '-f', 'mpegts', path.join(bufferDir, `segment_0000${i}.ts`)
+    ]);
   }
 
+  // Construct ReplayBuffer after segments are built — constructor cleans only existing segment_NNNNN.ts files
+  // so we move segments in after construction
+  const segPaths = [];
+  for (let i = 0; i < 3; i++) {
+    segPaths.push(path.join(bufferDir, `segment_0000${i}.ts`));
+  }
+  const rb = new ReplayBuffer({ bufferDir, durationMinutes: 10 });
+  // Re-create segments (constructor cleaned them) and inject into rb.segments
+  for (let i = 0; i < 3; i++) {
+    spawnSync('ffmpeg', [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency',
+      '-c:a', 'aac', '-t', '1',
+      '-f', 'mpegts', segPaths[i]
+    ]);
+    rb.segments.push({ path: segPaths[i], timestamp: Date.now() - (3 - i) * 1000 });
+  }
+  assert.strictEqual(rb.segments.length, 3, 'expected 3 pre-built segments');
+
+  const s0 = fs.statSync(rb.segments[0].path).size;
   const outPath = './tmp_recordings/capped_clip.mp4';
-  const result = rb.saveReplay(outPath, 5, 0.3);
-  const sizeBytes = fs.statSync(outPath).size;
-  assert.ok(sizeBytes <= 0.3 * 1024 * 1024, `clip size ${sizeBytes} exceeds cap`);
-  assert.strictEqual(sizeBytes, 200 * 1024);
-  assert.strictEqual(result.segmentsCount, 1);
+  const result = await rb.saveReplay(outPath, 5, s0 / (1024 * 1024));
+  assert.strictEqual(result.segmentsCount, 1, 'cap must include only the first segment');
+  assert.ok(result.success);
+  assert.strictEqual(fs.readFileSync(outPath).subarray(4, 8).toString('ascii'), 'ftyp', 'capped clip must be a valid MP4');
   assert.strictEqual(result.duration, 1, 'capped clip duration reflects included segments only');
 
-  const resultTinyCap = rb.saveReplay('./tmp_recordings/tiny_cap_clip.mp4', 5, 0.1);
+  const resultTinyCap = await rb.saveReplay('./tmp_recordings/tiny_cap_clip.mp4', 5, 0.000001);
   assert.strictEqual(resultTinyCap.segmentsCount, 1, 'first segment always included even if over cap');
-  assert.strictEqual(fs.statSync('./tmp_recordings/tiny_cap_clip.mp4').size, 200 * 1024);
   assert.ok(resultTinyCap.success);
 
-  const resultUnlimited = rb.saveReplay('./tmp_recordings/full_clip.mp4', 5, 0);
-  assert.strictEqual(resultUnlimited.segmentsCount, 3);
-  assert.strictEqual(fs.statSync('./tmp_recordings/full_clip.mp4').size, 3 * 200 * 1024);
-  assert.strictEqual(resultUnlimited.duration, 2);
+  const resultUnlimited = await rb.saveReplay('./tmp_recordings/full_clip.mp4', 5, 0);
+  assert.strictEqual(resultUnlimited.segmentsCount, 3, 'unlimited cap includes all segments');
+  assert.strictEqual(fs.readFileSync('./tmp_recordings/full_clip.mp4').subarray(4, 8).toString('ascii'), 'ftyp', 'full clip must be a valid MP4');
+  assert.ok(resultUnlimited.duration >= 1, 'full clip duration reflects all included segments');
 
   rb.stop();
   fs.rmSync(bufferDir, { recursive: true, force: true });
@@ -486,9 +594,12 @@ test('20. Max record size auto-stops recording', async () => {
   }
   assert.strictEqual(app.isRecording, false, 'recording should auto-stop at max size');
 
-  const recordings = getRecordings(10);
-  const last = recordings.find(r => r.type === 'full');
-  assert.ok(last, 'recording should be logged');
+  // The size watcher stops before the lavfi fallback can produce frames, so no
+  // file is written and no zero-byte recording row must be logged
+  await new Promise(r => setTimeout(r, 300));
+  const recordings = getRecordings(50);
+  const sizetest = recordings.find(r => r.type === 'full' && r.filename.includes('SIZETEST'));
+  assert.strictEqual(sizetest, undefined, 'a recording with no output must not be logged');
 
   app.close();
 });
