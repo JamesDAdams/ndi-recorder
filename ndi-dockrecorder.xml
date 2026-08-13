@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>ndi-dockrecorder</Name>
+  <Repository>ghcr.io/jamesdadams/ndi-recorder:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>host</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/JamesDAdams/ndi-recorder</Support>
+  <Project>https://github.com/JamesDAdams/ndi-recorder</Project>
+  <Overview>Headless NDI recorder with replay buffer, Stream Deck integration and Fireshare output. Exposes a web dashboard on port 3000.</Overview>
+  <Category>MediaApp:Video</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/JamesDAdams/ndi-recorder/main/icon.png</Icon>
+  <ExtraParams>--device /dev/dri:/dev/dri --tmpfs /tmp/replay_buffer:size=2147483648,mode=777</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+
+  <Config Name="Web UI Port" Target="3000" Default="3000" Mode="tcp" Description="Port for the web dashboard and API." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+
+  <Config Name="Recordings directory" Target="/media/fireshare/watch" Default="/mnt/user/recordings/ndi" Mode="rw" Description="Where full recordings are saved." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/recordings/ndi</Config>
+
+  <Config Name="Data directory" Target="/app/data" Default="/mnt/user/appdata/ndi-dockrecorder/data" Mode="rw" Description="Persistent storage for settings.db and profiles." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/ndi-dockrecorder/data</Config>
+
+  <Config Name="Config directory" Target="/app/config" Default="/mnt/user/appdata/ndi-dockrecorder/config" Mode="rw" Description="NDI Access Manager config directory." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/ndi-dockrecorder/config</Config>
+
+  <Config Name="PORT" Target="PORT" Default="3000" Mode="" Description="Internal port the Node.js server listens on (must match the port mapping above)." Type="Variable" Display="advanced" Required="false" Mask="false">3000</Config>
+
+  <Config Name="REPLAY_BUFFER_MINUTES" Target="REPLAY_BUFFER_MINUTES" Default="5" Mode="" Description="Duration of the replay buffer in minutes (5, 10 or 15)." Type="Variable" Display="always" Required="false" Mask="false">5</Config>
+
+  <Config Name="RECORDING_DIR" Target="RECORDING_DIR" Default="/media/fireshare/watch" Mode="" Description="Internal path where recordings are written (should match the Recordings directory volume target)." Type="Variable" Display="advanced" Required="false" Mask="false">/media/fireshare/watch</Config>
+
+  <Config Name="SETTINGS_DB" Target="SETTINGS_DB" Default="/app/data/settings.db" Mode="" Description="Path to the SQLite settings database inside the container." Type="Variable" Display="advanced" Required="false" Mask="false">/app/data/settings.db</Config>
+
+  <Config Name="NDI_ACCESS_IPS" Target="NDI_ACCESS_IPS" Default="" Mode="" Description="Comma-separated list of IP addresses allowed to access NDI streams (e.g. 192.168.1.10,192.168.1.20). Leave empty to allow all." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+</Container>
