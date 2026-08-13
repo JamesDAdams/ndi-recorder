@@ -559,7 +559,7 @@ test('19. Max clip size caps exported clip size', async () => {
   const resultUnlimited = await rb.saveReplay('./tmp_recordings/full_clip.mp4', 5, 0);
   assert.strictEqual(resultUnlimited.segmentsCount, 3, 'unlimited cap includes all segments');
   assert.strictEqual(fs.readFileSync('./tmp_recordings/full_clip.mp4').subarray(4, 8).toString('ascii'), 'ftyp', 'full clip must be a valid MP4');
-  assert.ok(resultUnlimited.duration >= 1, 'full clip duration reflects all included segments');
+  assert.strictEqual(resultUnlimited.duration, 3, 'full clip duration must reflect the probed real duration (3 x 1s segments)');
 
   rb.stop();
   fs.rmSync(bufferDir, { recursive: true, force: true });

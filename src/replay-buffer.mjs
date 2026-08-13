@@ -16,6 +16,21 @@ function runFfmpeg(args) {
   });
 }
 
+function probeDuration(filePath) {
+  return new Promise((resolve) => {
+    const proc = spawn('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', filePath]);
+    let out = '';
+    proc.stdout.on('data', d => { out += d.toString(); });
+    proc.stderr.on('data', () => {});
+    proc.on('error', () => resolve(null));
+    proc.on('close', (code) => {
+      if (code !== 0) return resolve(null);
+      const parsed = parseFloat(out.trim());
+      resolve(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+    });
+  });
+}
+
 export class ReplayBuffer {
   constructor(options = {}) {
     this.bufferDir = options.bufferDir || '/tmp/replay_buffer';
@@ -214,13 +229,8 @@ export class ReplayBuffer {
     }
 
     let resultDuration = duration;
-    if (chunks.length > 0 && chunks.length < selectedSegments.length) {
-      const included = selectedSegments.slice(0, chunks.length);
-      resultDuration = Math.min(
-        minutes * 60,
-        Math.max(1, Math.round((included[included.length - 1].timestamp - included[0].timestamp) / 1000))
-      );
-    }
+    const realDuration = await probeDuration(outputFilePath);
+    if (realDuration) resultDuration = Math.round(realDuration);
 
     return {
       success,

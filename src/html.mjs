@@ -128,6 +128,8 @@ export function getDashboardHtml() {
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col">
 
+  <div id="toast" class="hidden fixed top-4 right-4 z-[100] max-w-sm text-xs font-semibold px-4 py-3 rounded-lg shadow-lg border"></div>
+
   <!-- Top Header & Navigation -->
   <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex flex-col md:flex-row items-center justify-between gap-4">
     <div class="flex items-center gap-3">
@@ -234,6 +236,7 @@ export function getDashboardHtml() {
             <button id="btn-clip-15" onclick="saveReplayClip(15)" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2 px-1 rounded-lg shadow shadow-cyan-500/20 transition text-xs">15m</button>
           </div>
           <p id="clip-fallback-warning" class="hidden mt-3 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">⚠ Buffer en mode test pattern — aucun signal NDI re\u00e7u, les clips ne contiennent pas votre flux</p>
+          <p id="clip-status" class="hidden mt-3 text-[11px] rounded px-2 py-1"></p>
         </div>
 
         <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg p-4 flex flex-col justify-between">
@@ -901,17 +904,47 @@ ${API_DOCS_PAGE}
       if (overlay) overlay.classList.toggle('hidden', enabled);
     }
 
+    function showClipStatus(message, kind) {
+      const el = document.getElementById('clip-status');
+      if (!el) return;
+      el.textContent = message;
+      const styles = {
+        error: 'text-red-400 bg-red-500/10 border border-red-500/30',
+        warning: 'text-amber-400 bg-amber-500/10 border border-amber-500/30',
+        success: 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/30'
+      };
+      el.className = 'mt-3 text-[11px] rounded px-2 py-1 ' + (styles[kind] || styles.warning);
+    }
+
+    let toastTimer = null;
+    function showToast(message, kind) {
+      const el = document.getElementById('toast');
+      if (!el) return;
+      const styles = {
+        warning: 'text-amber-300 bg-slate-900 border-amber-500/40',
+        success: 'text-emerald-300 bg-slate-900 border-emerald-500/40'
+      };
+      el.textContent = message;
+      el.className = 'fixed top-4 right-4 z-[100] max-w-sm text-xs font-semibold px-4 py-3 rounded-lg shadow-lg border ' + (styles[kind] || styles.warning);
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.className = 'hidden fixed top-4 right-4 z-[100] max-w-sm text-xs font-semibold px-4 py-3 rounded-lg shadow-lg border';
+      }, 5000);
+    }
+
     async function saveReplayClip(minutes) {
       if (currentConfig.replayBufferEnabled === false) {
-        alert('Le système de clips est désactivé — activez-le avec le bouton "Clips" avant de sauvegarder un clip.');
+        showClipStatus('Le système de clips est désactivé — activez-le avec le bouton "Clips" avant de sauvegarder un clip.', 'warning');
         return;
       }
       const res = await fetch('/api/streamdeck/clip?minutes=' + (minutes || 5), { method: 'POST' });
       const data = await res.json();
       if (data.success === false) {
-        alert('Erreur lors de la sauvegarde du clip : ' + (data.error || 'échec inconnu'));
+        showClipStatus('Erreur lors de la sauvegarde du clip : ' + (data.error || 'échec inconnu'), 'error');
       } else if (data.duration && data.duration < minutes * 60) {
-        alert('Seulement ' + Math.round(data.duration / 60) + ' min de replay disponibles (demande : ' + minutes + ' min)');
+        showToast('Seulement ' + Math.round(data.duration / 60) + ' min de replay disponibles (demande : ' + minutes + ' min)', 'warning');
+      } else {
+        showClipStatus('Clip sauvegardé — ' + Math.round(data.duration) + 's', 'success');
       }
       fetchStatus();
     }
