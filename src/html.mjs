@@ -135,7 +135,6 @@ export function getDashboardHtml() {
     <div class="flex items-center gap-3">
       <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
       <h1 class="text-xl font-bold tracking-tight text-cyan-400">NDI Recorder</h1>
-      <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">Docker Headless</span>
     </div>
 
     <!-- Navigation Tabs -->
@@ -156,8 +155,46 @@ export function getDashboardHtml() {
 
     <div id="sys-status" class="flex gap-6 text-sm text-slate-400">
       <div>Temps maximum clips: <span id="stat-buffer-max" class="text-slate-200 font-mono">5 min</span></div>
+      <button type="button" id="ram-badge" onclick="openRamModal()" class="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition bg-slate-700/30 text-slate-400 border-slate-600/40 hover:bg-slate-700/50" title="Ouvrir les informations sur le stockage des clips">
+        <span id="ram-badge-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span>Clips : <span id="ram-badge-label">--</span></span>
+      </button>
     </div>
   </header>
+
+  <!-- RAM Storage Info Modal -->
+  <div id="ram-modal" class="hidden fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="font-semibold text-lg text-slate-100 flex items-center gap-2">
+          <span class="text-base leading-none">💾</span>
+          Stockage des clips
+        </h3>
+        <button onclick="closeRamModal()" class="text-slate-400 hover:text-slate-200 text-xl leading-none px-2">&times;</button>
+      </div>
+      <div id="ram-modal-ram-content" class="hidden space-y-3">
+        <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs text-emerald-300">
+          ✔ Les clips sont enregistr\u00e9s en RAM (<span id="ram-modal-size" class="font-mono font-bold">--</span> de tmpfs r\u00e9serv\u00e9s). Sauvegarde instantan\u00e9e et rapide, aucune usure du disque / SD.
+        </div>
+        <p class="text-xs text-slate-400">Les segments du replay buffer sont conserv\u00e9s en m\u00e9moire vive (tmpfs). Le clip n\u2019est \u00e9crit sur le disque qu\u2019au moment o\u00f9 vous le sauvegardez.</p>
+      </div>
+      <div id="ram-modal-disk-content" class="space-y-3">
+        <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-300">
+          &#9888; Les clips ne sont <span class="font-bold">PAS</span> enregistr\u00e9s en RAM : ils sont \u00e9crits en continu sur le disque.
+        </div>
+        <p class="text-xs text-slate-400"><span class="font-bold text-slate-200">Pourquoi activer la RAM ?</span> \u00c9criture constante sur le SSD / SD : usure acc\u00e9l\u00e9r\u00e9e, clips plus lents \u00e0 sauvegarder, et risque de perte si le disque est plein.</p>
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+          <p class="text-xs font-bold text-slate-300">Comment activer : ajoutez un tmpfs dans votre docker-compose.yml</p>
+          <pre class="text-[11px] font-mono text-cyan-400 overflow-x-auto whitespace-pre">services:
+  ndi-dockrecorder:
+    tmpfs:
+      - /tmp/replay_buffer:size=2G,mode=777</pre>
+          <p class="text-[11px] text-slate-500">Puis red\u00e9marrez le conteneur : <code class="text-cyan-400 font-mono">docker compose up -d</code></p>
+        </div>
+        <p class="text-[11px] text-slate-500">Le dossier du buffer est <code class="text-cyan-400 font-mono">/tmp/replay_buffer</code> (modifiable via la variable <code class="text-cyan-400 font-mono">REPLAY_BUFFER_DIR</code>). Adaptez le chemin si vous l\u2019avez personnalis\u00e9e.</p>
+      </div>
+    </div>
+  </div>
 
   <!-- PAGE 1: DASHBOARD -->
   <main id="page-dashboard" class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
@@ -333,6 +370,16 @@ export function getDashboardHtml() {
               <!-- Dynamically populated based on available encoders -->
             </select>
           </div>
+        </div>
+
+        <div id="ram-storage-info" class="bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-[11px] space-y-1">
+          <p class="flex items-center gap-2">
+            <span id="ram-storage-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span class="text-slate-400">Stockage des clips :</span>
+            <span id="ram-storage-text" class="font-mono text-slate-200">--</span>
+          </p>
+          <p id="ram-storage-warning" class="hidden text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1"></p>
+          <p id="ram-storage-note" class="hidden text-slate-500"></p>
         </div>
 
         <div>
@@ -581,6 +628,7 @@ ${API_DOCS_PAGE}
       const mbps = parseInt(input.value) || 0;
       document.getElementById('prof-bitrate-val').textContent = mbps + ' Mbps';
       updateBitrateEstimate(mbps);
+      updateRamStorageUi();
     }
 
     function updateBitrateEstimate(mbps) {
@@ -653,6 +701,7 @@ ${API_DOCS_PAGE}
         if (data.availableEncoders) {
           currentAvailableEncoders = data.availableEncoders;
         }
+        bufferStorage = data.bufferStorage || { isRam: false, sizeBytes: 0 };
         updatePreviewUi();
 
         activeSourceName = data.activeSource || "";
@@ -782,6 +831,7 @@ ${API_DOCS_PAGE}
 
         renderProfilesList();
         loadSelectedProfileToForm();
+        updateRamStorageUi();
 
         // Recording Status UI
         const btnRec = document.getElementById('btn-toggle-rec');
@@ -932,6 +982,91 @@ ${API_DOCS_PAGE}
       }, 5000);
     }
 
+    let bufferStorage = { isRam: false, sizeBytes: 0 };
+
+    function formatGb(bytes) {
+      const gb = (bytes || 0) / (1024 * 1024 * 1024);
+      return (Math.round(gb * 10) / 10) + ' GB';
+    }
+
+    function openRamModal() {
+      const modal = document.getElementById('ram-modal');
+      if (!modal) return;
+      const isRam = !!bufferStorage.isRam;
+      document.getElementById('ram-modal-ram-content').classList.toggle('hidden', !isRam);
+      document.getElementById('ram-modal-disk-content').classList.toggle('hidden', isRam);
+      const sizeEl = document.getElementById('ram-modal-size');
+      if (sizeEl) {
+        sizeEl.textContent = bufferStorage.sizeBytes > 0
+          ? formatGb(bufferStorage.sizeBytes)
+          : 'taille par d\u00e9faut, ~50% de la RAM';
+      }
+      modal.classList.remove('hidden');
+    }
+    window.openRamModal = openRamModal;
+
+    function closeRamModal() {
+      const modal = document.getElementById('ram-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closeRamModal = closeRamModal;
+
+    function updateRamStorageUi() {
+      const isRam = !!bufferStorage.isRam;
+      const hasSize = bufferStorage.sizeBytes > 0;
+      const sizeTxt = hasSize ? formatGb(bufferStorage.sizeBytes) : null;
+
+      const badge = document.getElementById('ram-badge');
+      if (badge) {
+        badge.classList.toggle('bg-emerald-500/15', isRam);
+        badge.classList.toggle('text-emerald-300', isRam);
+        badge.classList.toggle('border-emerald-500/30', isRam);
+        badge.classList.toggle('hover:bg-emerald-500/25', isRam);
+        badge.classList.toggle('bg-slate-700/30', !isRam);
+        badge.classList.toggle('text-slate-400', !isRam);
+        badge.classList.toggle('border-slate-600/40', !isRam);
+        badge.classList.toggle('hover:bg-slate-700/50', !isRam);
+      }
+      const dot = document.getElementById('ram-badge-dot');
+      if (dot) {
+        dot.classList.toggle('bg-emerald-400', isRam);
+        dot.classList.toggle('animate-pulse', isRam);
+        dot.classList.toggle('bg-cyan-400', !isRam);
+      }
+      const label = document.getElementById('ram-badge-label');
+      if (label) label.textContent = isRam ? 'RAM' + (sizeTxt ? ' (' + sizeTxt + ')' : '') : 'DISQUE';
+
+      const storageDot = document.getElementById('ram-storage-dot');
+      if (storageDot) {
+        storageDot.classList.toggle('bg-emerald-400', isRam);
+        storageDot.classList.toggle('bg-cyan-400', !isRam);
+      }
+      const storageText = document.getElementById('ram-storage-text');
+      if (storageText) {
+        storageText.textContent = isRam
+          ? (hasSize ? 'RAM \u2014 max ' + sizeTxt + ' (tmpfs)' : 'RAM \u2014 tmpfs (taille par d\u00e9faut, ~50% de la RAM)')
+          : 'disque (aucun tmpfs)';
+      }
+
+      const warning = document.getElementById('ram-storage-warning');
+      const note = document.getElementById('ram-storage-note');
+      if (isRam && hasSize) {
+        const bitrate = parseInt(document.getElementById('prof-bitrate')?.value) || 12;
+        const maxMin = Math.floor(bufferStorage.sizeBytes * 8 / (bitrate * 1e6) / 60);
+        warning.textContent = '\u26a0\ufe0f Avec votre tmpfs de ' + sizeTxt + ' et un d\u00e9bit de ' + bitrate + ' Mbps, vous ne pouvez conserver que les ~' + maxMin + ' derni\u00e8res minutes en RAM.';
+        warning.classList.remove('hidden');
+        note.classList.add('hidden');
+      } else if (isRam) {
+        warning.classList.add('hidden');
+        note.textContent = 'RAM activ\u00e9e : taille par d\u00e9faut (environ 50% de la RAM du conteneur).';
+        note.classList.remove('hidden');
+      } else {
+        warning.classList.add('hidden');
+        note.textContent = 'Les clips sont \u00e9crits sur le disque. Pour \u00e9viter l\u2019usure du disque et acc\u00e9l\u00e9rer les sauvegardes, montez le dossier du buffer en tmpfs (RAM) dans docker-compose.yml.';
+        note.classList.remove('hidden');
+      }
+    }
+
     async function saveReplayClip(minutes) {
       if (currentConfig.replayBufferEnabled === false) {
         showClipStatus('Le système de clips est désactivé — activez-le avec le bouton "Clips" avant de sauvegarder un clip.', 'warning');
@@ -1023,6 +1158,16 @@ ${API_DOCS_PAGE}
       if (keyInput) {
         keyInput.addEventListener('input', () => keyInput.setAttribute('data-user-editing', 'true'));
       }
+
+      const ramModal = document.getElementById('ram-modal');
+      if (ramModal) {
+        ramModal.addEventListener('click', (e) => {
+          if (e.target === ramModal) closeRamModal();
+        });
+      }
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeRamModal();
+      });
 
       ['prof-name', 'prof-source-select', 'prof-auto-record', 'prof-ram-buffer', 'prof-bitrate', 'prof-encoder', 'prof-quality', 'prof-record-dir', 'prof-clip-dir', 'prof-max-record-size', 'prof-max-clip-size'].forEach(id => {
         const field = document.getElementById(id);

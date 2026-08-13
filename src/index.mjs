@@ -9,6 +9,7 @@ import { ReplayBuffer } from './replay-buffer.mjs';
 import { spawnEncoder, resolveScale } from './encoder.mjs';
 import { FireshareExporter } from './fireshare.mjs';
 import { getDashboardHtml } from './html.mjs';
+import { detectBufferStorage } from './storage.mjs';
 
 const PORT = process.env.PORT || 3000;
 
@@ -290,6 +291,7 @@ class NdiRecorderServer {
       durationMinutes: this.config.replayBufferMinutes
     });
     this.exporter = new FireshareExporter(this.config);
+    this.bufferStorage = detectBufferStorage(this.replayBuffer.bufferDir);
 
     this.isRecording = false;
     this.recordingStartTime = null;
@@ -755,6 +757,7 @@ class NdiRecorderServer {
         sources: this.ndiManager.getSources(),
         availableEncoders: getAvailableEncoders(),
         buffer: this.replayBuffer.getStatus(),
+        bufferStorage: this.bufferStorage,
         replayBufferEnabled: this.config.replayBufferEnabled !== false,
         bufferFallback: this.bufferFallback,
         recordingFallback: this.recordingFallback,

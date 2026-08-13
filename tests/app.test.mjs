@@ -1,3 +1,4 @@
+import './setup-db.mjs';
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
@@ -86,6 +87,9 @@ test('4. Stream Deck Remote Integration (REST API endpoints)', async () => {
   const statusData = await resStatus.json();
   assert.strictEqual(resStatus.status, 200);
   assert.strictEqual(statusData.isRecording, false);
+  assert.ok(statusData.bufferStorage, 'status must expose bufferStorage');
+  assert.strictEqual(typeof statusData.bufferStorage.isRam, 'boolean');
+  assert.ok(statusData.bufferStorage.sizeBytes >= 0);
 
   // Test Stream Deck Start / Stop with simulated active source
   app.ndiManager.setSource('GAMINGPC_REAL_STREAM');
